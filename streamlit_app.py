@@ -80,7 +80,217 @@ if submit:
                 ]
                 
                 df = pd.DataFrame(stock_info[1:], columns=stock_info[0]).astype(str)
-                col1.dataframe(df, width=400, hide_index=True)
+                col1.dataframe(df, width=400, hide_index=True)                # ==============================
+                # Simon Stock Valuation Engine
+                # ==============================
+
+                st.markdown("---")
+                st.header("⭐ Simon Stock Valuation")
+
+                current_price = info.get("currentPrice")
+                forward_eps = info.get("forwardEps")
+                forward_pe = info.get("forwardPE")
+                peg = info.get("pegRatio")
+
+                # Try to get earnings growth
+                earnings_growth = info.get("earningsGrowth")
+                revenue_growth = info.get("revenueGrowth")
+
+                valuation_available = (
+                    current_price is not None
+                    and forward_eps is not None
+                    and forward_eps > 0
+                )
+
+                if valuation_available:
+
+                    # Estimate reasonable PE
+                    # Base PE depends on growth and PEG when available
+                    if earnings_growth is not None:
+                        growth_percent = earnings_growth * 100
+                    else:
+                        growth_percent = None
+
+                    if peg is not None and peg > 0:
+                        estimated_pe = peg * (
+                            growth_percent if growth_percent and growth_percent > 0 else 20
+                        )
+                    else:
+                        estimated_pe = 20
+
+                    # Keep PE within a conservative range
+                    estimated_pe = max(12, min(35, estimated_pe))
+
+                    # Fair value
+                    fair_value = forward_eps * estimated_pe
+
+                    # Buy zones
+                    bargain_price = fair_value * 0.80
+                    buy_price = fair_value * 0.90
+                    reasonable_high = fair_value * 1.10
+                    expensive_price = fair_value * 1.25
+
+                    # Margin of safety
+                    margin_of_safety = (
+                        (fair_value - current_price) / fair_value * 100
+                    )
+
+                    # Simon Score
+                    score = 50
+
+                    # Valuation score
+                    if current_price <= bargain_price:
+                        score += 25
+                    elif current_price <= buy_price:
+                        score += 18
+                    elif current_price <= reasonable_high:
+                        score += 8
+                    elif current_price <= expensive_price:
+                        score -= 8
+                    else:
+                        score -= 18
+
+                    # Growth score
+                    if earnings_growth is not None:
+                        if earnings_growth >= 0.20:
+                            score += 15
+                        elif earnings_growth >= 0.10:
+                            score += 10
+                        elif earnings_growth >= 0:
+                            score += 3
+                        else:
+                            score -= 10
+
+                    # Revenue growth score
+                    if revenue_growth is not None:
+                        if revenue_growth >= 0.15:
+                            score += 5
+                        elif revenue_growth >= 0.05:
+                            score += 3
+                        elif revenue_growth < 0:
+                            score -= 5
+
+                    # PEG bonus
+                    if peg is not None:
+                        if peg < 1:
+                            score += 5
+                        elif peg > 2:
+                            score -= 5
+
+                    score = max(0, min(100, score))
+
+                    # Final recommendation
+                    if current_price <= bargain_price:
+                        verdict = "🟢 白菜价"
+                        verdict_text = "估值非常有吸引力，可以重点考虑。"
+                    elif current_price <= buy_price:
+                        verdict = "🟢 值得买"
+                        verdict_text = "当前价格低于估算合理价值，具备一定安全边际。"
+                    elif current_price <= reasonable_high:
+                        verdict = "🟡 合理价"
+                        verdict_text = "价格基本合理，更适合分批买入或等待回调。"
+                    elif current_price <= expensive_price:
+                        verdict = "🟠 偏贵"
+                        verdict_text = "估值已经偏高，建议谨慎追高。"
+                    else:
+                        verdict = "🔴 贵价"
+                        verdict_text = "当前价格明显高于估算合理价值，建议等待。"
+
+                    # Display valuation metrics
+                    v1, v2, v3, v4 = st.columns(4)
+
+                    v1.metric(
+                        "Current Price",
+                        f"${current_price:.2f}"
+                    )
+
+                    v2.metric(
+                        "Estimated Fair Value",
+                        f"${fair_value:.2f}"
+                    )
+
+                    v3.metric(
+                        "Margin of Safety",
+                        f"{margin_of_safety:.1f}%"
+                    )
+
+                    v4.metric(
+                        "Simon Score",
+                        f"{score}/100"
+                    )
+
+                    st.subheader(verdict)
+                    st.write(verdict_text)
+
+                    st.markdown("### 🎯 Price Zones")
+
+                    valuation_table = pd.DataFrame({
+                        "Zone": [
+                            "🟢 白菜价",
+                            "🟢 值得买",
+                            "🟡 合理价",
+                            "🟠 偏贵",
+                            "🔴 贵价"
+                        ],
+                        "Price": [
+                            f"≤ ${bargain_price:.2f}",
+                            f"${bargain_price:.2f} – ${buy_price:.2f}",
+                            f"${buy_price:.2f} – ${reasonable_high:.2f}",
+                            f"${reasonable_high:.2f} – ${expensive_price:.2f}",
+                            f"> ${expensive_price:.2f}"
+                        ]
+                    })
+
+                    st.dataframe(
+                        valuation_table,
+                        use_container_width=True,
+                        hide_index=True
+                    )
+
+                    st.markdown("### 📊 Valuation Inputs")
+
+                    input_table = pd.DataFrame({
+                        "Metric": [
+                            "Forward EPS",
+                            "Forward PE",
+                            "PEG",
+                            "Earnings Growth",
+                            "Revenue Growth",
+                            "Estimated Fair PE"
+                        ],
+                        "Value": [
+                            safe_format(forward_eps, "${:.2f}"),
+                            safe_format(forward_pe),
+                            safe_format(peg),
+                            safe_format(
+                                earnings_growth * 100 if earnings_growth is not None else None,
+                                "{:.1f}%"
+                            ),
+                            safe_format(
+                                revenue_growth * 100 if revenue_growth is not None else None,
+                                "{:.1f}%"
+                            ),
+                            f"{estimated_pe:.1f}x"
+                        ]
+                    })
+
+                    st.dataframe(
+                        input_table,
+                        use_container_width=True,
+                        hide_index=True
+                    )
+
+                    st.info(
+                        "⚠️ Simon Stock 的估值是模型估算，不是保证价格。"
+                        "不同公司、行业和市场环境的合理估值不同，"
+                        "建议结合公司基本面和最新财报判断。"
+                    )
+
+                else:
+                    st.warning(
+                        "暂时无法获得足够的盈利数据进行估值。"
+                        "请尝试其他股票或稍后重新查询。"
+                    )
                 
                 # Display price information as a dataframe
                 price_info = [

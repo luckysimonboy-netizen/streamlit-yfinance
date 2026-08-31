@@ -5,24 +5,39 @@ import numpy as np
 from datetime import datetime, timezone
 
 # ============================================================
-# SIMON STOCK V7.0
-# AI-Native Investment Research Engine
+# SIMON STOCK V9
+# AI-Native US Stock Research Terminal
 #
-# Free core engine
+# Data: Yahoo Finance via yfinance
+# UI: Streamlit
 # No OpenAI API required
-# Data source: Yahoo Finance via yfinance
 #
-# IMPORTANT:
-# This is a research / education tool.
-# It is NOT financial advice.
+# Modules:
+#   1. Dashboard
+#   2. Simon Score 3.0
+#   3. Technical Analysis
+#   4. Fundamental Analysis
+#   5. Valuation
+#   6. Bull / Base / Bear
+#   7. Risk Radar
+#   8. Watchlist Scanner
+#   9. Stock Battle
+#  10. Portfolio
+#  11. Research Report
+# ============================================================
+
+
+# ============================================================
+# PAGE CONFIG
 # ============================================================
 
 st.set_page_config(
-    page_title="Simon Stock V7.0",
-    page_icon="🧠",
+    page_title="Simon Stock V9",
+    page_icon="📈",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
+
 
 # ============================================================
 # STYLE
@@ -31,328 +46,272 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    .block-container {
-        max-width: 1500px;
-        padding-top: 1.2rem;
-        padding-bottom: 3rem;
+
+    .main-title {
+        font-size: 2.5rem;
+        font-weight: 800;
+        margin-bottom: 0;
     }
 
-    .hero {
-        padding: 30px;
-        border-radius: 24px;
-        border: 1px solid rgba(128,128,128,0.25);
-        margin-bottom: 25px;
-        background: linear-gradient(
-            135deg,
-            rgba(70,90,180,0.14),
-            rgba(140,70,180,0.08)
-        );
-    }
-
-    .hero-title {
-        font-size: 46px;
-        font-weight: 900;
-        line-height: 1.1;
-    }
-
-    .hero-subtitle {
-        opacity: 0.68;
-        margin-top: 8px;
-    }
-
-    .decision {
-        font-size: 30px;
-        font-weight: 900;
-    }
-
-    .score {
-        font-size: 60px;
-        font-weight: 900;
+    .subtitle {
+        color: #777;
+        margin-bottom: 1.5rem;
     }
 
     .card {
-        padding: 20px;
-        border-radius: 18px;
-        border: 1px solid rgba(128,128,128,0.20);
-        background: rgba(128,128,128,0.05);
-        margin-bottom: 15px;
+        padding: 1rem;
+        border-radius: 12px;
+        border: 1px solid rgba(128,128,128,.25);
+        margin-bottom: 1rem;
     }
 
-    .small {
-        opacity: 0.62;
-        font-size: 13px;
-    }
-
-    .pill {
-        display: inline-block;
-        padding: 6px 12px;
-        border-radius: 999px;
-        margin-right: 5px;
-        border: 1px solid rgba(128,128,128,0.25);
-        font-size: 13px;
-    }
-
-    .positive {
+    .big-score {
+        font-size: 3rem;
         font-weight: 800;
     }
 
-    .negative {
-        font-weight: 800;
+    .small-text {
+        color: #777;
+        font-size: .85rem;
     }
 
-    .neutral {
-        font-weight: 800;
-    }
     </style>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 
+
 # ============================================================
-# BASIC HELPERS
+# SESSION STATE
 # ============================================================
 
-def safe_float(value, default=np.nan):
+if "watchlist" not in st.session_state:
+    st.session_state.watchlist = [
+        "AAPL",
+        "GOOGL",
+        "NVDA",
+        "MSFT",
+        "AMZN",
+        "META",
+        "AVGO",
+        "TSM",
+        "QCOM",
+        "PDD",
+    ]
+
+if "portfolio" not in st.session_state:
+    st.session_state.portfolio = []
+
+
+# ============================================================
+# HELPERS
+# ============================================================
+
+def safe_num(value):
     try:
-        if value is None:
-            return default
+        value = float(value)
 
-        result = float(value)
+        if np.isfinite(value):
+            return value
 
-        if np.isnan(result) or np.isinf(result):
-            return default
-
-        return result
+        return np.nan
 
     except Exception:
-        return default
+        return np.nan
 
 
-def safe_div(a, b, default=np.nan):
-    a = safe_float(a)
-    b = safe_float(b)
+def safe_div(a, b):
+    a = safe_num(a)
+    b = safe_num(b)
 
-    if np.isnan(a) or np.isnan(b) or b == 0:
-        return default
+    if not np.isfinite(a):
+        return np.nan
+
+    if not np.isfinite(b) or b == 0:
+        return np.nan
 
     return a / b
 
 
-def clamp(value, low=0, high=100):
-    value = safe_float(value, 50)
+def money(value):
+    value = safe_num(value)
 
-    return max(
-        low,
-        min(high, value)
-    )
-
-
-def percentage(value):
-    value = safe_float(value)
-
-    if np.isnan(value):
-        return "N/A"
-
-    return f"{value * 100:.1f}%"
-
-
-def dollar(value):
-    value = safe_float(value)
-
-    if np.isnan(value):
-        return "N/A"
-
-    abs_value = abs(value)
-
-    if abs_value >= 1_000_000_000_000:
-        return f"${value / 1_000_000_000_000:.2f}T"
-
-    if abs_value >= 1_000_000_000:
-        return f"${value / 1_000_000_000:.2f}B"
-
-    if abs_value >= 1_000_000:
-        return f"${value / 1_000_000:.2f}M"
+    if not np.isfinite(value):
+        return "—"
 
     return f"${value:,.2f}"
 
 
-def get_value(info, *keys):
+def percent(value):
+    value = safe_num(value)
+
+    if not np.isfinite(value):
+        return "—"
+
+    return f"{value * 100:.1f}%"
+
+
+def number(value):
+    value = safe_num(value)
+
+    if not np.isfinite(value):
+        return "—"
+
+    return f"{value:,.2f}"
+
+
+def compact_number(value):
+    value = safe_num(value)
+
+    if not np.isfinite(value):
+        return "—"
+
+    if abs(value) >= 1e12:
+        return f"{value / 1e12:.2f}T"
+
+    if abs(value) >= 1e9:
+        return f"{value / 1e9:.2f}B"
+
+    if abs(value) >= 1e6:
+        return f"{value / 1e6:.2f}M"
+
+    if abs(value) >= 1e3:
+        return f"{value / 1e3:.2f}K"
+
+    return f"{value:.2f}"
+
+
+def info_value(info, *keys):
+
     for key in keys:
 
-        if key not in info:
-            continue
+        value = safe_num(info.get(key))
 
-        value = safe_float(
-            info.get(key)
-        )
-
-        if not np.isnan(value):
+        if np.isfinite(value):
             return value
 
     return np.nan
 
 
-def fmt_number(value, digits=2):
-    value = safe_float(value)
+def score_label(score):
 
-    if np.isnan(value):
-        return "N/A"
+    if score >= 90:
+        return "S级"
 
-    return f"{value:.{digits}f}"
+    if score >= 80:
+        return "A级"
+
+    if score >= 70:
+        return "B级"
+
+    if score >= 60:
+        return "C级"
+
+    if score >= 50:
+        return "D级"
+
+    return "E级"
+
+
+def score_action(score):
+
+    if score >= 90:
+        return "🔥 强烈关注"
+
+    if score >= 80:
+        return "🟢 分批买入"
+
+    if score >= 70:
+        return "🟢 逢回调买"
+
+    if score >= 60:
+        return "🔵 持有 / 观察"
+
+    if score >= 50:
+        return "🟡 等待更好价格"
+
+    if score >= 40:
+        return "🟠 谨慎"
+
+    return "🔴 减仓 / 回避"
 
 
 # ============================================================
-# DATA ENGINE
+# DATA LOADING
 # ============================================================
 
-@st.cache_data(
-    ttl=300,
-    show_spinner=False
-)
-def load_stock(symbol, period):
-
-    ticker = yf.Ticker(symbol)
-
-    history = ticker.history(
-        period=period,
-        interval="1d",
-        auto_adjust=False
-    )
+@st.cache_data(ttl=900, show_spinner=False)
+def get_history(ticker, period):
 
     try:
-        info = ticker.info
+
+        data = yf.Ticker(ticker).history(
+            period=period,
+            auto_adjust=False
+        )
+
+        return data
+
+    except Exception:
+
+        return pd.DataFrame()
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def get_company_data(ticker):
+
+    ticker_obj = yf.Ticker(ticker)
+
+    try:
+        info = ticker_obj.info
     except Exception:
         info = {}
 
     try:
-        news = ticker.news
+        financials = ticker_obj.financials
     except Exception:
-        news = []
+        financials = pd.DataFrame()
 
-    return history, info, news
+    try:
+        balance = ticker_obj.balance_sheet
+    except Exception:
+        balance = pd.DataFrame()
+
+    try:
+        cashflow = ticker_obj.cashflow
+    except Exception:
+        cashflow = pd.DataFrame()
+
+    return info, financials, balance, cashflow
 
 
 # ============================================================
-# DATA QUALITY ENGINE
+# FINANCIAL DATA EXTRACTION
 # ============================================================
 
-def data_quality(history, info):
+def dataframe_value(df, names):
 
-    score = 100
-    issues = []
-    checks = []
+    if df is None or df.empty:
+        return np.nan
 
-    # Price history
-    if history is None or history.empty:
+    for name in names:
 
-        return {
-            "score": 0,
-            "confidence": "LOW",
-            "issues": ["没有历史价格数据。"],
-            "checks": []
-        }
+        if name in df.index:
 
-    checks.append("历史价格数据存在")
+            try:
 
-    if len(history) < 30:
+                series = pd.to_numeric(
+                    df.loc[name],
+                    errors="coerce"
+                ).dropna()
 
-        score -= 20
+                if len(series) > 0:
+                    return float(series.iloc[0])
 
-        issues.append(
-            "历史价格样本较少。"
-        )
+            except Exception:
+                pass
 
-    else:
-
-        checks.append(
-            "历史价格样本充足"
-        )
-
-    # Missing values
-    if "Close" in history.columns:
-
-        missing_ratio = (
-            history["Close"].isna().mean()
-        )
-
-        if missing_ratio > 0.05:
-
-            score -= 15
-
-            issues.append(
-                "收盘价存在较明显缺失。"
-            )
-
-        else:
-
-            checks.append(
-                "价格缺失率较低"
-            )
-
-    # Fundamental data
-    important_fields = [
-        "marketCap",
-        "revenueGrowth",
-        "profitMargins",
-        "returnOnEquity",
-        "freeCashflow",
-        "trailingPE"
-    ]
-
-    available = sum(
-        1
-        for field in important_fields
-        if not np.isnan(
-            get_value(info, field)
-        )
-    )
-
-    fundamental_ratio = (
-        available /
-        len(important_fields)
-    )
-
-    if fundamental_ratio < 0.50:
-
-        score -= 20
-
-        issues.append(
-            "关键基本面数据不完整。"
-        )
-
-    elif fundamental_ratio < 0.75:
-
-        score -= 10
-
-        issues.append(
-            "部分基本面数据缺失。"
-        )
-
-    else:
-
-        checks.append(
-            "主要基本面指标可用"
-        )
-
-    score = int(
-        clamp(score)
-    )
-
-    if score >= 85:
-        confidence = "HIGH"
-
-    elif score >= 70:
-        confidence = "MEDIUM"
-
-    else:
-        confidence = "LOW"
-
-    return {
-        "score": score,
-        "confidence": confidence,
-        "issues": issues,
-        "checks": checks
-    }
+    return np.nan
 
 
 # ============================================================
@@ -361,2142 +320,1374 @@ def data_quality(history, info):
 
 def technical_analysis(history):
 
-    result = {}
+    df = history.copy()
 
-    if history is None or history.empty:
-        return result
-
-    close = (
-        history["Close"]
-        .dropna()
-        .astype(float)
+    close = pd.to_numeric(
+        df["Close"],
+        errors="coerce"
     )
 
-    if close.empty:
-        return result
-
-    price = safe_float(
-        close.iloc[-1]
+    volume = pd.to_numeric(
+        df["Volume"],
+        errors="coerce"
     )
-
-    result["price"] = price
 
     # Moving averages
-    for window in [20, 50, 100, 200]:
 
-        if len(close) >= window:
+    df["MA20"] = close.rolling(20).mean()
+    df["MA50"] = close.rolling(50).mean()
+    df["MA200"] = close.rolling(200).mean()
 
-            result[
-                f"sma{window}"
-            ] = safe_float(
-                close
-                .rolling(window)
-                .mean()
-                .iloc[-1]
+    # RSI
+
+    delta = close.diff()
+
+    gain = delta.clip(lower=0).rolling(14).mean()
+
+    loss = (
+        -delta.clip(upper=0)
+        .rolling(14)
+        .mean()
+    )
+
+    rs = gain / loss.replace(0, np.nan)
+
+    df["RSI"] = 100 - (
+        100 / (1 + rs)
+    )
+
+    # MACD
+
+    ema12 = close.ewm(
+        span=12,
+        adjust=False
+    ).mean()
+
+    ema26 = close.ewm(
+        span=26,
+        adjust=False
+    ).mean()
+
+    df["MACD"] = ema12 - ema26
+
+    df["MACD_SIGNAL"] = (
+        df["MACD"]
+        .ewm(
+            span=9,
+            adjust=False
+        )
+        .mean()
+    )
+
+    # Volatility
+
+    df["VOLATILITY"] = (
+        close.pct_change()
+        .rolling(20)
+        .std()
+        * np.sqrt(252)
+    )
+
+    # Momentum
+
+    df["RETURN_1M"] = (
+        close / close.shift(21) - 1
+    )
+
+    df["RETURN_3M"] = (
+        close / close.shift(63) - 1
+    )
+
+    df["RETURN_6M"] = (
+        close / close.shift(126) - 1
+    )
+
+    # Volume ratio
+
+    df["AVG_VOLUME20"] = volume.rolling(20).mean()
+
+    df["VOLUME_RATIO"] = (
+        volume / df["AVG_VOLUME20"]
+    )
+
+    last = df.iloc[-1]
+
+    price = safe_num(last["Close"])
+    ma20 = safe_num(last["MA20"])
+    ma50 = safe_num(last["MA50"])
+    ma200 = safe_num(last["MA200"])
+    rsi = safe_num(last["RSI"])
+    macd = safe_num(last["MACD"])
+    macd_signal = safe_num(
+        last["MACD_SIGNAL"]
+    )
+    volatility = safe_num(
+        last["VOLATILITY"]
+    )
+
+    score = 50
+
+    reasons = []
+
+    # MA20
+
+    if np.isfinite(price) and np.isfinite(ma20):
+
+        if price > ma20:
+
+            score += 5
+            reasons.append(
+                "价格站上 MA20"
             )
 
-    # EMA
-    for window in [20, 50]:
+        else:
 
-        if len(close) >= window:
+            score -= 4
+            reasons.append(
+                "价格低于 MA20"
+            )
 
-            result[
-                f"ema{window}"
-            ] = safe_float(
-                close
-                .ewm(
-                    span=window,
-                    adjust=False
-                )
-                .mean()
-                .iloc[-1]
+    # MA50
+
+    if np.isfinite(price) and np.isfinite(ma50):
+
+        if price > ma50:
+
+            score += 7
+            reasons.append(
+                "价格站上 MA50"
+            )
+
+        else:
+
+            score -= 6
+            reasons.append(
+                "价格低于 MA50"
+            )
+
+    # MA200
+
+    if np.isfinite(price) and np.isfinite(ma200):
+
+        if price > ma200:
+
+            score += 9
+            reasons.append(
+                "价格站上 MA200"
+            )
+
+        else:
+
+            score -= 9
+            reasons.append(
+                "价格低于 MA200"
+            )
+
+    # MA trend
+
+    if np.isfinite(ma50) and np.isfinite(ma200):
+
+        if ma50 > ma200:
+
+            score += 7
+            reasons.append(
+                "MA50 > MA200，中长期趋势偏多"
+            )
+
+        else:
+
+            score -= 6
+            reasons.append(
+                "MA50 < MA200，中长期趋势偏弱"
             )
 
     # RSI
-    if len(close) >= 15:
 
-        delta = close.diff()
+    if np.isfinite(rsi):
 
-        gain = delta.clip(
-            lower=0
-        )
+        if 45 <= rsi <= 65:
 
-        loss = -delta.clip(
-            upper=0
-        )
-
-        avg_gain = (
-            gain
-            .rolling(14)
-            .mean()
-        )
-
-        avg_loss = (
-            loss
-            .rolling(14)
-            .mean()
-        )
-
-        rs = (
-            avg_gain /
-            avg_loss.replace(
-                0,
-                np.nan
-            )
-        )
-
-        rsi = (
-            100 -
-            100 /
-            (1 + rs)
-        )
-
-        result["rsi"] = safe_float(
-            rsi.iloc[-1]
-        )
-
-    # Returns
-    for days, name in [
-        (5, "return5"),
-        (20, "return20"),
-        (60, "return60"),
-        (252, "return1y")
-    ]:
-
-        if len(close) > days:
-
-            old_price = safe_float(
-                close.iloc[-days - 1]
+            score += 7
+            reasons.append(
+                "RSI处于相对健康区域"
             )
 
-            result[name] = (
-                price /
-                old_price -
-                1
+        elif rsi < 30:
+
+            score += 6
+            reasons.append(
+                "RSI进入超卖区域"
+            )
+
+        elif rsi > 75:
+
+            score -= 8
+            reasons.append(
+                "RSI偏热"
+            )
+
+        elif rsi > 65:
+
+            score -= 2
+            reasons.append(
+                "RSI偏强"
+            )
+
+    # MACD
+
+    if (
+        np.isfinite(macd)
+        and np.isfinite(macd_signal)
+    ):
+
+        if macd > macd_signal:
+
+            score += 7
+            reasons.append(
+                "MACD偏多"
+            )
+
+        else:
+
+            score -= 6
+            reasons.append(
+                "MACD偏空"
             )
 
     # Volatility
-    returns = close.pct_change().dropna()
 
-    if len(returns) >= 20:
+    if np.isfinite(volatility):
 
-        result["volatility20"] = (
-            safe_float(
-                returns
-                .tail(20)
-                .std()
-            ) *
-            np.sqrt(252)
-        )
+        if volatility > 0.65:
 
-    # Drawdown
-    rolling_high = close.cummax()
+            score -= 7
+            reasons.append(
+                "年化波动率较高"
+            )
 
-    drawdown = (
-        close /
-        rolling_high -
-        1
+        elif volatility < 0.25:
+
+            score += 3
+            reasons.append(
+                "波动率相对温和"
+            )
+
+    score = float(
+        np.clip(score, 0, 100)
     )
 
-    result["current_drawdown"] = safe_float(
-        drawdown.iloc[-1]
-    )
-
-    result["max_drawdown"] = safe_float(
-        drawdown.min()
-    )
-
-    # 52-week range
-    if len(close) >= 252:
-
-        last_year = close.tail(252)
-
-        result["52w_high"] = safe_float(
-            last_year.max()
-        )
-
-        result["52w_low"] = safe_float(
-            last_year.min()
-        )
-
-        result["distance_from_52w_high"] = (
-            price /
-            result["52w_high"] -
-            1
-        )
-
-    return result
+    return {
+        "price": price,
+        "ma20": ma20,
+        "ma50": ma50,
+        "ma200": ma200,
+        "rsi": rsi,
+        "macd": macd,
+        "macd_signal": macd_signal,
+        "volatility": volatility,
+        "score": score,
+        "reasons": reasons,
+    }, df
 
 
 # ============================================================
 # FUNDAMENTAL ENGINE
 # ============================================================
 
-def fundamental_metrics(info):
-
-    metrics = {
-
-        "revenue_growth":
-            get_value(
-                info,
-                "revenueGrowth"
-            ),
-
-        "earnings_growth":
-            get_value(
-                info,
-                "earningsGrowth"
-            ),
-
-        "profit_margin":
-            get_value(
-                info,
-                "profitMargins"
-            ),
-
-        "operating_margin":
-            get_value(
-                info,
-                "operatingMargins"
-            ),
-
-        "gross_margin":
-            get_value(
-                info,
-                "grossMargins"
-            ),
-
-        "roe":
-            get_value(
-                info,
-                "returnOnEquity"
-            ),
-
-        "roa":
-            get_value(
-                info,
-                "returnOnAssets"
-            ),
-
-        "debt_equity":
-            get_value(
-                info,
-                "debtToEquity"
-            ),
-
-        "current_ratio":
-            get_value(
-                info,
-                "currentRatio"
-            ),
-
-        "quick_ratio":
-            get_value(
-                info,
-                "quickRatio"
-            ),
-
-        "fcf":
-            get_value(
-                info,
-                "freeCashflow"
-            ),
-
-        "operating_cashflow":
-            get_value(
-                info,
-                "operatingCashflow"
-            ),
-
-        "pe":
-            get_value(
-                info,
-                "trailingPE"
-            ),
-
-        "forward_pe":
-            get_value(
-                info,
-                "forwardPE"
-            ),
-
-        "peg":
-            get_value(
-                info,
-                "pegRatio"
-            ),
-
-        "price_to_sales":
-            get_value(
-                info,
-                "priceToSalesTrailing12Months"
-            ),
-
-        "price_to_book":
-            get_value(
-                info,
-                "priceToBook"
-            ),
-
-        "beta":
-            get_value(
-                info,
-                "beta"
-            ),
-
-        "market_cap":
-            get_value(
-                info,
-                "marketCap"
-            ),
-
-        "enterprise_value":
-            get_value(
-                info,
-                "enterpriseValue"
-            ),
-
-        "shares":
-            get_value(
-                info,
-                "sharesOutstanding"
-            ),
-
-        "free_cashflow_yield":
-            np.nan
-    }
-
-    market_cap = metrics[
-        "market_cap"
-    ]
-
-    fcf = metrics[
-        "fcf"
-    ]
-
-    if (
-        not np.isnan(market_cap)
-        and market_cap > 0
-        and not np.isnan(fcf)
-    ):
-
-        metrics[
-            "free_cashflow_yield"
-        ] = (
-            fcf /
-            market_cap
-        )
-
-    return metrics
-
-
-# ============================================================
-# SCORE ENGINE
-# ============================================================
-
-def score_growth(m):
-
-    score = 50
-
-    revenue = m[
-        "revenue_growth"
-    ]
-
-    earnings = m[
-        "earnings_growth"
-    ]
-
-    if not np.isnan(revenue):
-
-        if revenue >= 0.30:
-            score += 30
-
-        elif revenue >= 0.20:
-            score += 22
-
-        elif revenue >= 0.10:
-            score += 12
-
-        elif revenue >= 0:
-            score += 2
-
-        else:
-            score -= 25
-
-    if not np.isnan(earnings):
-
-        if earnings >= 0.30:
-            score += 25
-
-        elif earnings >= 0.20:
-            score += 18
-
-        elif earnings >= 0.10:
-            score += 10
-
-        elif earnings >= 0:
-            score += 2
-
-        else:
-            score -= 25
-
-    return clamp(score)
-
-
-def score_profitability(m):
-
-    score = 50
-
-    roe = m["roe"]
-    margin = m["profit_margin"]
-    operating = m["operating_margin"]
-    gross = m["gross_margin"]
-
-    if not np.isnan(roe):
-
-        if roe >= 0.30:
-            score += 25
-
-        elif roe >= 0.20:
-            score += 18
-
-        elif roe >= 0.10:
-            score += 8
-
-        elif roe < 0:
-            score -= 25
-
-    if not np.isnan(margin):
-
-        if margin >= 0.25:
-            score += 20
-
-        elif margin >= 0.15:
-            score += 12
-
-        elif margin >= 0.05:
-            score += 4
-
-        elif margin < 0:
-            score -= 20
-
-    if not np.isnan(operating):
-
-        if operating >= 0.25:
-            score += 15
-
-        elif operating >= 0.15:
-            score += 8
-
-        elif operating < 0:
-            score -= 15
-
-    if not np.isnan(gross):
-
-        if gross >= 0.60:
-            score += 10
-
-        elif gross >= 0.40:
-            score += 5
-
-    return clamp(score)
-
-
-def score_financial(m):
-
-    score = 50
-
-    debt = m[
-        "debt_equity"
-    ]
-
-    current = m[
-        "current_ratio"
-    ]
-
-    fcf = m[
-        "fcf"
-    ]
-
-    cfo = m[
-        "operating_cashflow"
-    ]
-
-    if not np.isnan(debt):
-
-        if debt < 40:
-            score += 20
-
-        elif debt < 80:
-            score += 12
-
-        elif debt < 150:
-            score += 0
-
-        else:
-            score -= 25
-
-    if not np.isnan(current):
-
-        if current >= 2:
-            score += 15
-
-        elif current >= 1:
-            score += 5
-
-        elif current < 0.7:
-            score -= 15
-
-    if not np.isnan(fcf):
-
-        if fcf > 0:
-            score += 15
-
-        else:
-            score -= 20
-
-    if not np.isnan(cfo):
-
-        if cfo > 0:
-            score += 5
-
-        else:
-            score -= 10
-
-    return clamp(score)
-
-
-def score_capital_efficiency(m):
-
-    score = 50
-
-    roe = m["roe"]
-    roa = m["roa"]
-
-    if not np.isnan(roe):
-
-        if roe >= 0.30:
-            score += 25
-
-        elif roe >= 0.20:
-            score += 18
-
-        elif roe >= 0.10:
-            score += 8
-
-        elif roe < 0:
-            score -= 20
-
-    if not np.isnan(roa):
-
-        if roa >= 0.15:
-            score += 20
-
-        elif roa >= 0.08:
-            score += 10
-
-        elif roa < 0:
-            score -= 15
-
-    return clamp(score)
-
-
-def score_valuation(m):
-
-    score = 50
-
-    pe = m["pe"]
-    forward_pe = m["forward_pe"]
-    peg = m["peg"]
-    fcf_yield = m[
-        "free_cashflow_yield"
-    ]
-
-    chosen_pe = forward_pe
-
-    if np.isnan(chosen_pe):
-        chosen_pe = pe
-
-    if not np.isnan(chosen_pe):
-
-        if chosen_pe <= 12:
-            score += 30
-
-        elif chosen_pe <= 18:
-            score += 22
-
-        elif chosen_pe <= 25:
-            score += 12
-
-        elif chosen_pe <= 35:
-            score += 2
-
-        elif chosen_pe <= 50:
-            score -= 15
-
-        else:
-            score -= 30
-
-    if not np.isnan(peg):
-
-        if peg < 1:
-            score += 15
-
-        elif peg < 1.5:
-            score += 8
-
-        elif peg > 3:
-            score -= 18
-
-    if not np.isnan(fcf_yield):
-
-        if fcf_yield >= 0.08:
-            score += 20
-
-        elif fcf_yield >= 0.05:
-            score += 12
-
-        elif fcf_yield >= 0.03:
-            score += 5
-
-        elif fcf_yield < 0.01:
-            score -= 12
-
-    return clamp(score)
-
-
-def score_risk(m, t):
-
-    score = 70
-
-    beta = m["beta"]
-    debt = m["debt_equity"]
-
-    if not np.isnan(beta):
-
-        if beta <= 1:
-            score += 10
-
-        elif beta <= 1.5:
-            score += 0
-
-        elif beta <= 2:
-            score -= 10
-
-        else:
-            score -= 25
-
-    if not np.isnan(debt):
-
-        if debt > 200:
-            score -= 20
-
-        elif debt > 150:
-            score -= 10
-
-    max_dd = t.get(
-        "max_drawdown",
-        np.nan
-    )
-
-    if not np.isnan(max_dd):
-
-        if max_dd > -0.20:
-            score += 10
-
-        elif max_dd > -0.40:
-            score += 0
-
-        elif max_dd > -0.60:
-            score -= 10
-
-        else:
-            score -= 20
-
-    volatility = t.get(
-        "volatility20",
-        np.nan
-    )
-
-    if not np.isnan(volatility):
-
-        if volatility > 0.60:
-            score -= 15
-
-        elif volatility > 0.40:
-            score -= 8
-
-    return clamp(score)
-
-
-# ============================================================
-# BUSINESS QUALITY
-# ============================================================
-
-def score_business_quality(info, m):
-
-    score = 50
-
-    market_cap = m[
-        "market_cap"
-    ]
-
-    revenue = m[
-        "revenue_growth"
-    ]
-
-    margin = m[
-        "profit_margin"
-    ]
-
-    roe = m[
-        "roe"
-    ]
-
-    fcf = m[
-        "fcf"
-    ]
-
-    # Scale is NOT treated as quality by itself.
-    # It only gives a small stability bonus.
-
-    if not np.isnan(market_cap):
-
-        if market_cap >= 500e9:
-            score += 8
-
-        elif market_cap >= 100e9:
-            score += 5
-
-        elif market_cap >= 10e9:
-            score += 2
-
-    if not np.isnan(revenue):
-
-        if revenue > 0.10:
-            score += 8
-
-        elif revenue < 0:
-            score -= 8
-
-    if not np.isnan(margin):
-
-        if margin > 0.20:
-            score += 10
-
-        elif margin < 0:
-            score -= 10
-
-    if not np.isnan(roe):
-
-        if roe > 0.20:
-            score += 10
-
-        elif roe < 0:
-            score -= 10
-
-    if not np.isnan(fcf):
-
-        if fcf > 0:
-            score += 8
-
-        else:
-            score -= 10
-
-    return clamp(score)
-
-
-# ============================================================
-# MASTER SCORE
-# ============================================================
-
-def calculate_simon_score(
+def fundamental_analysis(
     info,
-    metrics,
-    technical
+    financials,
+    balance,
+    cashflow
 ):
 
-    scores = {}
-
-    scores[
-        "Business Quality"
-    ] = score_business_quality(
+    revenue = info_value(
         info,
-        metrics
+        "totalRevenue"
     )
 
-    scores[
-        "Growth"
-    ] = score_growth(
-        metrics
-    )
-
-    scores[
-        "Profitability"
-    ] = score_profitability(
-        metrics
-    )
-
-    scores[
-        "Financial Strength"
-    ] = score_financial(
-        metrics
-    )
-
-    scores[
-        "Capital Efficiency"
-    ] = score_capital_efficiency(
-        metrics
-    )
-
-    scores[
-        "Valuation"
-    ] = score_valuation(
-        metrics
-    )
-
-    scores[
-        "Risk"
-    ] = score_risk(
-        metrics,
-        technical
-    )
-
-    weights = {
-
-        "Business Quality": 0.18,
-
-        "Growth": 0.14,
-
-        "Profitability": 0.16,
-
-        "Financial Strength": 0.14,
-
-        "Capital Efficiency": 0.10,
-
-        "Valuation": 0.18,
-
-        "Risk": 0.10
-    }
-
-    total = 0
-
-    for key, weight in weights.items():
-
-        total += (
-            scores[key] *
-            weight
-        )
-
-    return (
-        int(round(total)),
-        scores
-    )
-
-
-# ============================================================
-# DCF ENGINE
-# ============================================================
-
-def dcf_scenario(
-    fcf_per_share,
-    growth,
-    discount,
-    terminal_growth
-):
-
-    if (
-        np.isnan(fcf_per_share)
-        or fcf_per_share <= 0
-    ):
-        return np.nan
-
-    projected = fcf_per_share
-
-    pv = 0
-
-    for year in range(1, 6):
-
-        projected *= (
-            1 + growth
-        )
-
-        pv += (
-            projected /
-            ((1 + discount) ** year)
-        )
-
-    terminal = (
-        projected *
-        (1 + terminal_growth)
-        /
-        (
-            discount -
-            terminal_growth
-        )
-    )
-
-    terminal_pv = (
-        terminal /
-        ((1 + discount) ** 5)
-    )
-
-    return max(
-        0,
-        pv + terminal_pv
-    )
-
-
-def dcf_model(info):
-
-    fcf = get_value(
-        info,
-        "freeCashflow"
-    )
-
-    shares = get_value(
-        info,
-        "sharesOutstanding"
-    )
-
-    if (
-        np.isnan(fcf)
-        or np.isnan(shares)
-        or fcf <= 0
-        or shares <= 0
-    ):
-        return None
-
-    fcf_per_share = (
-        fcf /
-        shares
-    )
-
-    earnings_growth = get_value(
-        info,
-        "earningsGrowth"
-    )
-
-    revenue_growth = get_value(
+    revenue_growth = info_value(
         info,
         "revenueGrowth"
     )
 
-    growth_candidates = [
-        x
-        for x in [
-            earnings_growth,
-            revenue_growth
-        ]
-        if not np.isnan(x)
-    ]
-
-    if growth_candidates:
-
-        base_growth = float(
-            np.median(
-                growth_candidates
-            )
-        )
-
-    else:
-
-        base_growth = 0.08
-
-    base_growth = clamp(
-        base_growth,
-        -0.05,
-        0.20
-    ) / 100 if False else base_growth
-
-    # Explicit bounds
-    base_growth = max(
-        -0.05,
-        min(
-            0.20,
-            base_growth
-        )
-    )
-
-    scenarios = {
-
-        "Bear": {
-            "growth":
-                max(
-                    -0.03,
-                    base_growth - 0.06
-                ),
-            "discount": 0.10,
-            "terminal":
-                0.02
-        },
-
-        "Base": {
-            "growth":
-                max(
-                    0.00,
-                    base_growth - 0.02
-                ),
-            "discount": 0.085,
-            "terminal":
-                0.025
-        },
-
-        "Bull": {
-            "growth":
-                min(
-                    0.20,
-                    base_growth + 0.04
-                ),
-            "discount": 0.08,
-            "terminal":
-                0.03
-        }
-    }
-
-    values = {}
-
-    for name, assumption in scenarios.items():
-
-        values[name] = dcf_scenario(
-            fcf_per_share,
-            assumption["growth"],
-            assumption["discount"],
-            assumption["terminal"]
-        )
-
-    return values
-
-
-# ============================================================
-# MULTIPLE VALUATION
-# ============================================================
-
-def multiple_fair_value(
-    info,
-    price
-):
-
-    pe = get_value(
-        info,
-        "trailingPE"
-    )
-
-    forward_pe = get_value(
-        info,
-        "forwardPE"
-    )
-
-    growth = get_value(
+    earnings_growth = info_value(
         info,
         "earningsGrowth"
     )
 
-    values = []
-
-    if not np.isnan(pe) and pe > 0:
-
-        if not np.isnan(growth):
-
-            if growth >= 0.25:
-                target_pe = 30
-
-            elif growth >= 0.15:
-                target_pe = 27
-
-            elif growth >= 0.08:
-                target_pe = 24
-
-            elif growth >= 0:
-                target_pe = 20
-
-            else:
-                target_pe = 16
-
-        else:
-
-            target_pe = 22
-
-        values.append(
-            price *
-            target_pe /
-            pe
-        )
-
-    if (
-        not np.isnan(forward_pe)
-        and forward_pe > 0
-    ):
-
-        values.append(
-            price *
-            23 /
-            forward_pe
-        )
-
-    if not values:
-        return np.nan
-
-    return float(
-        np.median(values)
-    )
-
-
-# ============================================================
-# FCF YIELD VALUATION
-# ============================================================
-
-def fcf_yield_value(
-    info,
-    price
-):
-
-    fcf = get_value(
+    gross_margin = info_value(
         info,
-        "freeCashflow"
+        "grossMargins"
     )
 
-    market_cap = get_value(
+    operating_margin = info_value(
         info,
-        "marketCap"
+        "operatingMargins"
     )
 
-    if (
-        np.isnan(fcf)
-        or np.isnan(market_cap)
-        or market_cap <= 0
-        or fcf <= 0
-    ):
-        return np.nan
-
-    current_yield = (
-        fcf /
-        market_cap
-    )
-
-    target_yield = 0.04
-
-    if current_yield <= 0:
-        return np.nan
-
-    return (
-        price *
-        current_yield /
-        target_yield
-    )
-
-
-# ============================================================
-# FAIR VALUE ENGINE
-# ============================================================
-
-def fair_value_engine(
-    info,
-    price
-):
-
-    dcf = dcf_model(
-        info
-    )
-
-    multiple = multiple_fair_value(
+    profit_margin = info_value(
         info,
-        price
+        "profitMargins"
     )
 
-    fcf_value = fcf_yield_value(
+    roe = info_value(
         info,
-        price
+        "returnOnEquity"
     )
 
-    components = []
-
-    if dcf is not None:
-
-        base = safe_float(
-            dcf.get(
-                "Base",
-                np.nan
-            )
-        )
-
-        if not np.isnan(base):
-            components.append(
-                base
-            )
-
-    if not np.isnan(multiple):
-        components.append(
-            multiple
-        )
-
-    if not np.isnan(fcf_value):
-        components.append(
-            fcf_value
-        )
-
-    if not components:
-        return None
-
-    fair = float(
-        np.median(
-            components
-        )
+    roa = info_value(
+        info,
+        "returnOnAssets"
     )
 
-    # Prevent absurd model outputs.
-    fair = max(
-        price * 0.40,
-        min(
-            price * 2.50,
-            fair
-        )
+    debt_equity = info_value(
+        info,
+        "debtToEquity"
     )
 
-    return {
-
-        "fair": fair,
-
-        "strong_buy":
-            fair * 0.70,
-
-        "buy":
-            fair * 0.85,
-
-        "expensive":
-            fair * 1.15,
-
-        "danger":
-            fair * 1.35,
-
-        "dcf":
-            dcf,
-
-        "multiple":
-            multiple,
-
-        "fcf_value":
-            fcf_value,
-
-        "components":
-            components
-    }
-
-
-# ============================================================
-# PRICE ATTRACTIVENESS
-# ============================================================
-
-def price_attractiveness(
-    price,
-    valuation
-):
-
-    if valuation is None:
-        return np.nan
-
-    fair = valuation[
-        "fair"
-    ]
-
-    if np.isnan(fair) or fair <= 0:
-        return np.nan
-
-    upside = (
-        fair /
-        price -
-        1
+    current_ratio = info_value(
+        info,
+        "currentRatio"
     )
 
-    if upside >= 0.40:
-        return 95
-
-    if upside >= 0.25:
-        return 85
-
-    if upside >= 0.10:
-        return 75
-
-    if upside >= 0:
-        return 65
-
-    if upside >= -0.10:
-        return 55
-
-    if upside >= -0.25:
-        return 40
-
-    if upside >= -0.40:
-        return 25
-
-    return 10
-
-
-# ============================================================
-# VERDICT ENGINE
-# ============================================================
-
-def generate_verdict(
-    score,
-    price_score,
-    price,
-    valuation,
-    risk_preference
-):
-
-    if valuation is None:
-
-        if score >= 85:
-
-            return (
-                "🟡 GREAT BUSINESS / DATA LIMITED",
-                "公司质量信号不错，但当前缺乏足够估值数据。"
-            )
-
-        if score >= 70:
-
-            return (
-                "🟡 WATCH",
-                "基本面中等偏好，但估值证据不足。"
-            )
-
-        return (
-            "🔴 WAIT",
-            "当前证据不足以支持积极判断。"
-        )
-
-    fair = valuation[
-        "fair"
-    ]
-
-    if np.isnan(price_score):
-
-        return (
-            "🟡 WATCH",
-            "估值模型暂时无法形成可靠的价格判断。"
-        )
-
-    if (
-        score >= 85
-        and price_score >= 85
-    ):
-
-        return (
-            "🟢 STRONG BUY ZONE",
-            "公司质量高，同时当前价格提供了较好的安全边际。"
-        )
-
-    if (
-        score >= 80
-        and price_score >= 70
-    ):
-
-        return (
-            "🟢 BUY ZONE",
-            "公司质量与价格之间存在较好的平衡。"
-        )
-
-    if (
-        score >= 80
-        and price_score >= 50
-    ):
-
-        return (
-            "🟡 GREAT COMPANY / WAIT",
-            "公司质量很好，但价格没有提供足够安全边际。"
-        )
-
-    if (
-        score >= 70
-        and price_score >= 70
-    ):
-
-        return (
-            "🟢 SELECTIVE BUY",
-            "质量尚可且价格有一定吸引力，但需要控制仓位。"
-        )
-
-    if (
-        score >= 70
-        and price_score >= 45
-    ):
-
-        return (
-            "🟡 WATCH",
-            "公司存在一定价值，但当前并不形成强烈的赔率优势。"
-        )
-
-    if price > fair * 1.35:
-
-        return (
-            "🔴 AVOID / WAIT",
-            "估值明显高于模型合理价值。"
-        )
-
-    return (
-        "🟠 LOW CONVICTION",
-        "当前风险收益比不足以形成高确定性判断。"
+    eps = info_value(
+        info,
+        "trailingEps"
     )
 
+    forward_eps = info_value(
+        info,
+        "forwardEps"
+    )
 
-# ============================================================
-# MASTER COUNCIL
-# ============================================================
+    pe = info_value(
+        info,
+        "trailingPE"
+    )
 
-def master_council(
-    metrics,
-    score,
-    valuation
-):
+    forward_pe = info_value(
+        info,
+        "forwardPE"
+    )
 
-    growth = metrics[
-        "earnings_growth"
-    ]
+    peg = info_value(
+        info,
+        "pegRatio"
+    )
 
-    roe = metrics[
-        "roe"
-    ]
+    ps = info_value(
+        info,
+        "priceToSalesTrailing12Months"
+    )
 
-    pe = metrics[
-        "pe"
-    ]
+    pb = info_value(
+        info,
+        "priceToBook"
+    )
 
-    fcf = metrics[
-        "fcf"
-    ]
+    ev_ebitda = info_value(
+        info,
+        "enterpriseToEbitda"
+    )
 
-    result = {}
+    beta = info_value(
+        info,
+        "beta"
+    )
 
-    # Buffett framework
-    if score >= 85:
+    dividend_yield = info_value(
+        info,
+        "dividendYield"
+    )
 
-        if (
-            valuation is not None
-            and valuation["fair"] >= 1
-            and valuation["fair"] >=
-            valuation["fair"] * 0.85
+    if np.isfinite(dividend_yield):
+
+        if dividend_yield > 1:
+            dividend_yield /= 100
+
+    operating_cashflow = info_value(
+        info,
+        "operatingCashflow"
+    )
+
+    capital_expenditure = info_value(
+        info,
+        "capitalExpenditures"
+    )
+
+    # Fallback financial statements
+
+    if not np.isfinite(revenue):
+
+        revenue = dataframe_value(
+            financials,
+            [
+                "Total Revenue",
+                "Operating Revenue"
+            ]
+        )
+
+    if not np.isfinite(
+        operating_cashflow
+    ):
+
+        operating_cashflow = dataframe_value(
+            cashflow,
+            [
+                "Operating Cash Flow",
+                "Total Cash From Operating Activities"
+            ]
+        )
+
+    if not np.isfinite(
+        capital_expenditure
+    ):
+
+        capital_expenditure = dataframe_value(
+            cashflow,
+            [
+                "Capital Expenditure",
+                "Capital Expenditures"
+            ]
+        )
+
+    # FCF
+
+    free_cash_flow = np.nan
+
+    if np.isfinite(
+        operating_cashflow
+    ):
+
+        if np.isfinite(
+            capital_expenditure
         ):
 
-            buffett = (
-                "重点不是预测下一季度股价，而是判断这是不是一个能够长期产生大量现金的好生意。"
-                "当前模型显示商业质量较强，下一步应该研究护城河、资本配置与长期竞争优势。"
-            )
-
-        else:
-
-            buffett = (
-                "商业质量值得研究，但价格仍然决定投资回报率。"
-                "好公司并不意味着任何价格都值得买。"
-            )
-
-    elif score >= 70:
-
-        buffett = (
-            "有一定商业质量，但还没有足够证据证明它具备非常强的长期复利属性。"
-        )
-
-    else:
-
-        buffett = (
-            "目前没有足够证据把它定义为高确定性的长期复利资产。"
-        )
-
-    result[
-        "Buffett"
-    ] = buffett
-
-    # Munger framework
-    risks = []
-
-    if (
-        not np.isnan(pe)
-        and pe > 40
-    ):
-        risks.append(
-            "估值过高"
-        )
-
-    if (
-        not np.isnan(growth)
-        and growth < 0
-    ):
-        risks.append(
-            "盈利下降"
-        )
-
-    if (
-        not np.isnan(roe)
-        and roe < 0.10
-    ):
-        risks.append(
-            "资本回报偏低"
-        )
-
-    if (
-        not np.isnan(fcf)
-        and fcf <= 0
-    ):
-        risks.append(
-            "现金流质量不足"
-        )
-
-    if not risks:
-
-        risks.append(
-            "永久性损失风险来自竞争格局、估值或管理层资本配置"
-        )
-
-    result[
-        "Munger"
-    ] = (
-        "反向思考："
-        + "、".join(risks)
-        + "。"
-    )
-
-    # Duan Yongping framework
-    if score >= 80:
-
-        duan = (
-            "先判断生意，再判断价格。"
-            "如果生意足够好，短期价格波动不是核心问题；"
-            "但如果价格远远透支未来增长，再好的生意也可能变成低回报投资。"
-        )
-
-    else:
-
-        duan = (
-            "不要因为便宜就自动认为值得买。"
-            "首先需要证明这是一个值得长期持有的生意。"
-        )
-
-    result[
-        "段永平"
-    ] = duan
-
-    # Lynch framework
-    if (
-        not np.isnan(growth)
-        and not np.isnan(pe)
-        and pe > 0
-    ):
-
-        growth_pct = (
-            growth * 100
-        )
-
-        peg_like = (
-            pe /
-            max(
-                growth_pct,
-                1
-            )
-        )
-
-        if peg_like < 1:
-
-            lynch = (
-                "增长相对于估值具有吸引力。"
-            )
-
-        elif peg_like < 2:
-
-            lynch = (
-                "增长与估值基本匹配。"
-            )
-
-        else:
-
-            lynch = (
-                "估值可能已经跑在增长之前。"
-            )
-
-    else:
-
-        lynch = (
-            "缺乏足够的增长与估值数据。"
-        )
-
-    result[
-        "Lynch"
-    ] = lynch
-
-    # Fisher framework
-    result[
-        "Fisher"
-    ] = (
-        "重点观察长期市场空间、产品竞争力、研发能力、"
-        "利润率趋势以及管理层执行能力。"
-    )
-
-    return result
-
-
-# ============================================================
-# BULL / BEAR ENGINE
-# ============================================================
-
-def bull_case(metrics, score):
-
-    points = []
-
-    growth = metrics[
-        "revenue_growth"
-    ]
-
-    earnings = metrics[
-        "earnings_growth"
-    ]
-
-    roe = metrics[
-        "roe"
-    ]
-
-    fcf = metrics[
-        "fcf"
-    ]
-
-    if (
-        not np.isnan(growth)
-        and growth > 0.10
-    ):
-
-        points.append(
-            "收入仍保持正增长，为长期复利提供基础。"
-        )
-
-    if (
-        not np.isnan(earnings)
-        and earnings > 0.15
-    ):
-
-        points.append(
-            "盈利增长明显，为估值扩张或业绩兑现提供支持。"
-        )
-
-    if (
-        not np.isnan(roe)
-        and roe > 0.20
-    ):
-
-        points.append(
-            "资本回报率较高，说明企业使用股东资本的效率较好。"
-        )
-
-    if (
-        not np.isnan(fcf)
-        and fcf > 0
-    ):
-
-        points.append(
-            "自由现金流为正，为股东回报和再投资提供基础。"
-        )
-
-    if not points:
-
-        points.append(
-            "当前数据没有形成特别强的多头证据。"
-        )
-
-    return points[:6]
-
-
-def bear_case(metrics, technical):
-
-    points = []
-
-    growth = metrics[
-        "revenue_growth"
-    ]
-
-    earnings = metrics[
-        "earnings_growth"
-    ]
-
-    debt = metrics[
-        "debt_equity"
-    ]
-
-    pe = metrics[
-        "pe"
-    ]
-
-    fcf = metrics[
-        "fcf"
-    ]
-
-    if (
-        not np.isnan(growth)
-        and growth < 0
-    ):
-
-        points.append(
-            "收入出现负增长，说明商业扩张正在放缓。"
-        )
-
-    if (
-        not np.isnan(earnings)
-        and earnings < 0
-    ):
-
-        points.append(
-            "盈利出现负增长，可能意味着经营或周期压力。"
-        )
-
-    if (
-        not np.isnan(debt)
-        and debt > 150
-    ):
-
-        points.append(
-            "杠杆偏高，会放大经济周期和经营风险。"
-        )
-
-    if (
-        not np.isnan(pe)
-        and pe > 35
-    ):
-
-        points.append(
-            "估值较高，增长不及预期时容易出现估值压缩。"
-        )
-
-    if (
-        np.isnan(fcf)
-        or fcf <= 0
-    ):
-
-        points.append(
-            "自由现金流不足，使长期价值判断更困难。"
-        )
-
-    max_dd = technical.get(
-        "max_drawdown",
-        np.nan
-    )
-
-    if (
-        not np.isnan(max_dd)
-        and max_dd < -0.50
-    ):
-
-        points.append(
-            "历史回撤较大，说明市场对该资产的风险定价可能非常激烈。"
-        )
-
-    points.append(
-        "竞争者、技术变化、监管、利率或管理层资本配置都可能破坏当前投资逻辑。"
-    )
-
-    return points[:7]
-
-
-# ============================================================
-# DEVIL'S ADVOCATE
-# ============================================================
-
-def devil_advocate(
-    metrics,
-    score,
-    valuation
-):
-
-    arguments = []
-
-    pe = metrics[
-        "pe"
-    ]
-
-    growth = metrics[
-        "earnings_growth"
-    ]
-
-    revenue = metrics[
-        "revenue_growth"
-    ]
-
-    debt = metrics[
-        "debt_equity"
-    ]
-
-    fcf = metrics[
-        "fcf"
-    ]
-
-    if score >= 80:
-
-        arguments.append(
-            "市场可能已经充分认识到公司的优秀，因此未来收益率未必与公司质量同样优秀。"
-        )
-
-    if (
-        not np.isnan(pe)
-        and pe > 35
-    ):
-
-        arguments.append(
-            "高估值意味着任何业绩失误都可能同时受到盈利下修和估值压缩的双重打击。"
-        )
-
-    if (
-        not np.isnan(growth)
-        and growth < 0
-    ):
-
-        arguments.append(
-            "盈利负增长可能意味着当前商业模式正在经历阶段性或结构性压力。"
-        )
-
-    if (
-        not np.isnan(revenue)
-        and revenue < 0.05
-    ):
-
-        arguments.append(
-            "收入增长偏慢可能限制未来长期复利速度。"
-        )
-
-    if (
-        not np.isnan(debt)
-        and debt > 150
-    ):
-
-        arguments.append(
-            "较高杠杆可能在经济下行期间放大经营风险。"
-        )
-
-    if (
-        np.isnan(fcf)
-        or fcf <= 0
-    ):
-
-        arguments.append(
-            "如果利润无法转化为自由现金流，账面盈利的质量需要重新审视。"
-        )
-
-    arguments.extend(
-        [
-            "竞争对手可能通过价格、产品或技术改变竞争格局。",
-            "利率变化可能改变市场愿意支付的估值倍数。",
-            "管理层资本配置错误可能损害原本不错的商业模式。",
-            "市场可能已经把最乐观的未来情景计入股价。"
-        ]
-    )
-
-    return arguments[:8]
-
-
-# ============================================================
-# THESIS BREAKERS
-# ============================================================
-
-def thesis_breakers(metrics):
-
-    breakers = []
-
-    if (
-        not np.isnan(
-            metrics["revenue_growth"]
-        )
-    ):
-
-        breakers.append(
-            "收入增长连续恶化"
-        )
-
-    if (
-        not np.isnan(
-            metrics["earnings_growth"]
-        )
-    ):
-
-        breakers.append(
-            "盈利增长持续低于预期"
-        )
-
-    if (
-        not np.isnan(
-            metrics["profit_margin"]
-        )
-    ):
-
-        breakers.append(
-            "利润率出现结构性下降"
-        )
-
-    breakers.extend(
-        [
-            "自由现金流持续恶化",
-            "核心产品竞争优势明显下降",
-            "管理层资本配置出现重大问题",
-            "行业竞争格局发生结构性变化",
-            "估值远远跑在基本面前面"
-        ]
-    )
-
-    return breakers
-
-
-# ============================================================
-# SCENARIO ENGINE
-# ============================================================
-
-def scenario_analysis(
-    price,
-    valuation
-):
-
-    if valuation is None:
-        return None
-
-    fair = valuation[
-        "fair"
-    ]
-
-    return {
-
-        "Bear":
-            fair * 0.75,
-
-        "Base":
-            fair,
-
-        "Bull":
-            fair * 1.25
-    }
-
-
-# ============================================================
-# POSITION PLAN
-# ============================================================
-
-def position_plan(
-    price,
-    valuation,
-    risk_preference
-):
-
-    if valuation is None:
-
-        return [
-            (
-                "观察仓",
-                "0–10%",
-                "估值证据不足。"
-            )
-        ]
-
-    strong = valuation[
-        "strong_buy"
-    ]
-
-    buy = valuation[
-        "buy"
-    ]
-
-    fair = valuation[
-        "fair"
-    ]
-
-    if price <= strong:
-
-        if risk_preference == "保守":
-
-            return [
-                (
-                    "第一笔",
-                    "15%",
-                    "先建立观察仓"
-                ),
-                (
-                    "第二笔",
-                    "10%",
-                    "价格进一步确认"
-                ),
-                (
-                    "第三笔",
-                    "10%",
-                    "基本面继续稳定"
-                )
-            ]
-
-        if risk_preference == "进取":
-
-            return [
-                (
-                    "第一笔",
-                    "30%",
-                    "安全边际较高"
-                ),
-                (
-                    "第二笔",
-                    "20%",
-                    "继续确认"
-                ),
-                (
-                    "第三笔",
-                    "15%",
-                    "基本面确认"
-                )
-            ]
-
-        return [
-            (
-                "第一笔",
-                "20%",
-                "建立初始仓位"
-            ),
-            (
-                "第二笔",
-                "15%",
-                "价格继续有吸引力"
-            ),
-            (
-                "第三笔",
-                "10%",
-                "基本面确认"
-            )
-        ]
-
-    if price <= buy:
-
-        return [
-            (
-                "第一笔",
-                "10–15%",
-                "小仓位试探"
-            ),
-            (
-                "第二笔",
-                "10%",
-                "价格进一步改善"
-            ),
-            (
-                "第三笔",
-                "5–10%",
-                "确认基本面没有恶化"
-            )
-        ]
-
-    if price <= fair:
-
-        return [
-            (
-                "观察仓",
-                "0–5%",
-                "接近合理价值"
-            ),
-            (
-                "等待",
-                "现金",
-                "等待更强安全边际"
-            )
-        ]
-
-    return [
-        (
-            "不追涨",
-            "0%",
-            "当前价格缺乏安全边际"
-        ),
-        (
-            "等待",
-            "现金",
-            "等待更好的价格"
-        )
-    ]
-
-
-# ============================================================
-# NEWS ENGINE
-# ============================================================
-
-def extract_news(news):
-
-    rows = []
-
-    if not isinstance(
-        news,
-        list
-    ):
-        return rows
-
-    for item in news[:12]:
-
-        try:
-
-            content = item.get(
-                "content",
-                item
-            )
-
-            title = content.get(
-                "title",
-                ""
-            )
-
-            provider = content.get(
-                "provider",
-                {}
-            )
-
-            if isinstance(
-                provider,
-                dict
-            ):
-
-                publisher = provider.get(
-                    "displayName",
-                    ""
+            if capital_expenditure < 0:
+
+                free_cash_flow = (
+                    operating_cashflow
+                    + capital_expenditure
                 )
 
             else:
 
-                publisher = str(
-                    provider
+                free_cash_flow = (
+                    operating_cashflow
+                    - capital_expenditure
                 )
 
-            if title:
+        else:
 
-                rows.append(
-                    {
-                        "Title":
-                            title,
-                        "Publisher":
-                            publisher
-                    }
-                )
+            free_cash_flow = (
+                operating_cashflow
+            )
 
-        except Exception:
-            continue
+    # --------------------------------------------------------
+    # Growth score
+    # --------------------------------------------------------
 
-    return rows
+    growth_score = 50
+
+    if np.isfinite(
+        revenue_growth
+    ):
+
+        growth_score += np.clip(
+            revenue_growth * 80,
+            -25,
+            25
+        )
+
+    if np.isfinite(
+        earnings_growth
+    ):
+
+        growth_score += np.clip(
+            earnings_growth * 60,
+            -25,
+            25
+        )
+
+    growth_score = np.clip(
+        growth_score,
+        0,
+        100
+    )
+
+    # --------------------------------------------------------
+    # Quality score
+    # --------------------------------------------------------
+
+    quality_score = 50
+
+    if np.isfinite(
+        gross_margin
+    ):
+
+        quality_score += np.clip(
+            (gross_margin - 0.30) * 50,
+            -10,
+            10
+        )
+
+    if np.isfinite(
+        operating_margin
+    ):
+
+        quality_score += np.clip(
+            (operating_margin - 0.10) * 50,
+            -10,
+            10
+        )
+
+    if np.isfinite(roe):
+
+        quality_score += np.clip(
+            (roe - 0.12) * 40,
+            -12,
+            12
+        )
+
+    quality_score = np.clip(
+        quality_score,
+        0,
+        100
+    )
+
+    # --------------------------------------------------------
+    # Balance sheet
+    # --------------------------------------------------------
+
+    balance_score = 60
+
+    if np.isfinite(
+        debt_equity
+    ):
+
+        if debt_equity < 50:
+
+            balance_score += 12
+
+        elif debt_equity > 150:
+
+            balance_score -= 18
+
+    if np.isfinite(
+        current_ratio
+    ):
+
+        if current_ratio >= 1.5:
+
+            balance_score += 8
+
+        elif current_ratio < 1:
+
+            balance_score -= 12
+
+    balance_score = np.clip(
+        balance_score,
+        0,
+        100
+    )
+
+    # --------------------------------------------------------
+    # Cash flow
+    # --------------------------------------------------------
+
+    cashflow_score = 50
+
+    if np.isfinite(
+        free_cash_flow
+    ):
+
+        if free_cash_flow > 0:
+
+            cashflow_score += 25
+
+        else:
+
+            cashflow_score -= 25
+
+    cashflow_score = np.clip(
+        cashflow_score,
+        0,
+        100
+    )
+
+    # --------------------------------------------------------
+    # Valuation
+    # --------------------------------------------------------
+
+    valuation_score = 55
+
+    if np.isfinite(peg):
+
+        if peg < 1:
+
+            valuation_score += 18
+
+        elif peg < 1.5:
+
+            valuation_score += 10
+
+        elif peg > 2.5:
+
+            valuation_score -= 15
+
+    elif np.isfinite(pe):
+
+        if pe < 18:
+
+            valuation_score += 15
+
+        elif pe > 35:
+
+            valuation_score -= 15
+
+    if (
+        np.isfinite(pe)
+        and np.isfinite(forward_pe)
+    ):
+
+        if forward_pe < pe * 0.9:
+
+            valuation_score += 8
+
+        elif forward_pe > pe * 1.1:
+
+            valuation_score -= 8
+
+    valuation_score = np.clip(
+        valuation_score,
+        0,
+        100
+    )
+
+    # --------------------------------------------------------
+    # Overall
+    # --------------------------------------------------------
+
+    overall = (
+
+        growth_score * 0.25
+        + quality_score * 0.25
+        + balance_score * 0.15
+        + cashflow_score * 0.15
+        + valuation_score * 0.20
+
+    )
+
+    return {
+
+        "revenue": revenue,
+
+        "revenue_growth": revenue_growth,
+
+        "earnings_growth": earnings_growth,
+
+        "gross_margin": gross_margin,
+
+        "operating_margin": operating_margin,
+
+        "profit_margin": profit_margin,
+
+        "roe": roe,
+
+        "roa": roa,
+
+        "debt_equity": debt_equity,
+
+        "current_ratio": current_ratio,
+
+        "eps": eps,
+
+        "forward_eps": forward_eps,
+
+        "pe": pe,
+
+        "forward_pe": forward_pe,
+
+        "peg": peg,
+
+        "ps": ps,
+
+        "pb": pb,
+
+        "ev_ebitda": ev_ebitda,
+
+        "beta": beta,
+
+        "dividend_yield": dividend_yield,
+
+        "operating_cashflow": operating_cashflow,
+
+        "capital_expenditure": capital_expenditure,
+
+        "free_cash_flow": free_cash_flow,
+
+        "growth_score": growth_score,
+
+        "quality_score": quality_score,
+
+        "balance_score": balance_score,
+
+        "cashflow_score": cashflow_score,
+
+        "valuation_score": valuation_score,
+
+        "score": overall,
+
+    }
 
 
 # ============================================================
-# HERO
+# DCF
 # ============================================================
 
-st.markdown(
-    """
-    <div class="hero">
+def dcf_per_share(
+    fcf,
+    shares,
+    growth,
+    discount_rate,
+    terminal_growth
+):
 
-    <div class="hero-subtitle">
-    SIMON STOCK V7.0 · AI-NATIVE INVESTMENT RESEARCH ENGINE
-    </div>
+    fcf = safe_num(fcf)
+    shares = safe_num(shares)
 
-    <div class="hero-title">
-    🧠 Simon Stock
-    </div>
+    if (
+        not np.isfinite(fcf)
+        or not np.isfinite(shares)
+        or fcf <= 0
+        or shares <= 0
+    ):
 
-    <div class="hero-subtitle">
-    Data × Quality × Growth × Valuation × Risk × Inversion
-    </div>
+        return np.nan
 
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+    discount_rate = max(
+        discount_rate,
+        terminal_growth + 0.005
+    )
+
+    pv = 0
+
+    current_fcf = fcf
+
+    for year in range(1, 6):
+
+        current_fcf *= (
+            1 + growth
+        )
+
+        pv += (
+            current_fcf
+            / (1 + discount_rate) ** year
+        )
+
+    terminal_value = (
+
+        current_fcf
+        * (1 + terminal_growth)
+        / (discount_rate - terminal_growth)
+
+    )
+
+    pv_terminal = (
+        terminal_value
+        / (1 + discount_rate) ** 5
+    )
+
+    enterprise_value = (
+        pv + pv_terminal
+    )
+
+    return (
+        enterprise_value
+        / shares
+    )
+
+
+def dcf_analysis(info, fundamental):
+
+    fcf = fundamental[
+        "free_cash_flow"
+    ]
+
+    shares = info_value(
+        info,
+        "sharesOutstanding"
+    )
+
+    beta = fundamental[
+        "beta"
+    ]
+
+    growth = fundamental[
+        "earnings_growth"
+    ]
+
+    if not np.isfinite(growth):
+
+        growth = fundamental[
+            "revenue_growth"
+        ]
+
+    if not np.isfinite(growth):
+
+        growth = 0.08
+
+    growth = float(
+        np.clip(
+            growth,
+            -0.02,
+            0.18
+        )
+    )
+
+    if np.isfinite(beta):
+
+        discount = (
+            0.085
+            + np.clip(
+                beta - 1,
+                -0.4,
+                1.2
+            ) * 0.025
+        )
+
+    else:
+
+        discount = 0.10
+
+    discount = float(
+        np.clip(
+            discount,
+            0.085,
+            0.14
+        )
+    )
+
+    bear = dcf_per_share(
+        fcf,
+        shares,
+        np.clip(
+            growth - 0.05,
+            -0.05,
+            0.12
+        ),
+        discount + 0.015,
+        0.025
+    )
+
+    base = dcf_per_share(
+        fcf,
+        shares,
+        np.clip(
+            growth,
+            0.02,
+            0.15
+        ),
+        discount,
+        0.03
+    )
+
+    bull = dcf_per_share(
+        fcf,
+        shares,
+        np.clip(
+            growth + 0.04,
+            0.04,
+            0.20
+        ),
+        max(
+            discount - 0.01,
+            0.08
+        ),
+        0.035
+    )
+
+    return {
+
+        "bear": bear,
+
+        "base": base,
+
+        "bull": bull,
+
+        "growth": growth,
+
+        "discount": discount,
+
+    }
+
+
+# ============================================================
+# MULTI-MODEL VALUATION
+# ============================================================
+
+def valuation_analysis(
+    price,
+    fundamental,
+    dcf
+):
+
+    anchors = []
+
+    # DCF
+
+    if np.isfinite(
+        dcf["base"]
+    ):
+
+        anchors.append(
+            (
+                "DCF",
+                dcf["base"],
+                0.45
+            )
+        )
+
+    # Forward EPS
+
+    forward_eps = fundamental[
+        "forward_eps"
+    ]
+
+    earnings_growth = fundamental[
+        "earnings_growth"
+    ]
+
+    revenue_growth = fundamental[
+        "revenue_growth"
+    ]
+
+    if np.isfinite(
+        forward_eps
+    ):
+
+        growth = earnings_growth
+
+        if not np.isfinite(growth):
+
+            growth = revenue_growth
+
+        if not np.isfinite(growth):
+
+            growth = 0.10
+
+        target_pe = np.clip(
+            18 + growth * 35,
+            15,
+            32
+        )
+
+        eps_value = (
+            forward_eps
+            * target_pe
+        )
+
+        anchors.append(
+            (
+                "Forward EPS × P/E",
+                eps_value,
+                0.35
+            )
+        )
+
+    elif np.isfinite(
+        fundamental["eps"]
+    ):
+
+        eps_value = (
+            fundamental["eps"]
+            * 20
+        )
+
+        anchors.append(
+            (
+                "EPS × 20",
+                eps_value,
+                0.20
+            )
+        )
+
+    if not anchors:
+
+        return {
+
+            "fair": np.nan,
+
+            "cheap": np.nan,
+
+            "low": np.nan,
+
+            "high": np.nan,
+
+            "expensive": np.nan,
+
+            "upside": np.nan,
+
+            "anchors": [],
+
+        }
+
+    total_weight = sum(
+        item[2]
+        for item in anchors
+    )
+
+    fair_value = sum(
+        item[1] * item[2]
+        for item in anchors
+    ) / total_weight
+
+    return {
+
+        "fair": fair_value,
+
+        "cheap": fair_value * 0.78,
+
+        "low": fair_value * 0.90,
+
+        "high": fair_value * 1.10,
+
+        "expensive": fair_value * 1.25,
+
+        "upside": safe_div(
+            fair_value,
+            price
+        ) - 1,
+
+        "anchors": anchors,
+
+    }
+
+
+# ============================================================
+# RISK ENGINE
+# ============================================================
+
+def risk_analysis(
+    fundamental,
+    technical
+):
+
+    risk = 30
+
+    reasons = []
+
+    beta = fundamental[
+        "beta"
+    ]
+
+    volatility = technical[
+        "volatility"
+    ]
+
+    debt_equity = fundamental[
+        "debt_equity"
+    ]
+
+    current_ratio = fundamental[
+        "current_ratio"
+    ]
+
+    if np.isfinite(beta):
+
+        if beta > 1.5:
+
+            risk += 18
+
+            reasons.append(
+                "Beta较高"
+            )
+
+        elif beta < 0.8:
+
+            risk -= 6
+
+    if np.isfinite(
+        volatility
+    ):
+
+        if volatility > 0.60:
+
+            risk += 18
+
+            reasons.append(
+                "近期波动率较高"
+            )
+
+        elif volatility < 0.25:
+
+            risk -= 5
+
+    if np.isfinite(
+        debt_equity
+    ):
+
+        if debt_equity > 200:
+
+            risk += 15
+
+            reasons.append(
+                "负债权益比较高"
+            )
+
+        elif debt_equity < 50:
+
+            risk -= 7
+
+    if np.isfinite(
+        current_ratio
+    ):
+
+        if current_ratio < 1:
+
+            risk += 12
+
+            reasons.append(
+                "流动比率低于1"
+            )
+
+    if not np.isfinite(
+        fundamental[
+            "free_cash_flow"
+        ]
+    ):
+
+        risk += 5
+
+        reasons.append(
+            "自由现金流数据不足"
+        )
+
+    risk = float(
+        np.clip(
+            risk,
+            0,
+            100
+        )
+    )
+
+    return risk, reasons
+
+
+# ============================================================
+# SIMON SCORE 3.0
+# ============================================================
+
+def calculate_simon_score(
+    technical,
+    fundamental,
+    valuation,
+    risk
+):
+
+    technical_score = (
+        technical["score"]
+    )
+
+    fundamental_score = (
+        fundamental["score"]
+    )
+
+    if np.isfinite(
+        valuation["upside"]
+    ):
+
+        valuation_component = (
+            50
+            + np.clip(
+                valuation["upside"] * 100,
+                -35,
+                35
+            )
+        )
+
+    else:
+
+        valuation_component = (
+            fundamental[
+                "valuation_score"
+            ]
+        )
+
+    risk_component = (
+        100 - risk
+    )
+
+    score = (
+
+        technical_score * 0.25
+
+        + fundamental_score * 0.40
+
+        + valuation_component * 0.20
+
+        + risk_component * 0.15
+
+    )
+
+    score = float(
+        np.clip(
+            score,
+            0,
+            100
+        )
+    )
+
+    return score
+
+
+# ============================================================
+# PRICE ZONE
+# ============================================================
+
+def price_zone(
+    price,
+    valuation
+):
+
+    fair = valuation["fair"]
+
+    if (
+        not np.isfinite(price)
+        or not np.isfinite(fair)
+    ):
+
+        return (
+            "⚪ 数据不足",
+            "暂无足够估值数据"
+        )
+
+    if price <= valuation["cheap"]:
+
+        return (
+            "🟢 白菜价",
+            "深度安全边际"
+        )
+
+    if price <= valuation["low"]:
+
+        return (
+            "🟢 买入区",
+            "偏便宜，可考虑分批"
+        )
+
+    if price <= valuation["high"]:
+
+        return (
+            "🔵 合理区",
+            "适合正常持有 / 观察"
+        )
+
+    if price <= valuation["expensive"]:
+
+        return (
+            "🟡 偏贵区",
+            "等待更好的价格"
+        )
+
+    return (
+        "🔴 高估区",
+        "安全边际不足"
+    )
+
+
+# ============================================================
+# FULL ANALYSIS
+# ============================================================
+
+def analyze_stock(
+    ticker,
+    period="1y"
+):
+
+    history = get_history(
+        ticker,
+        period
+    )
+
+    if history.empty:
+
+        return None
+
+    info, financials, balance, cashflow = (
+        get_company_data(ticker)
+    )
+
+    technical, technical_df = (
+        technical_analysis(history)
+    )
+
+    fundamental = fundamental_analysis(
+        info,
+        financials,
+        balance,
+        cashflow
+    )
+
+    dcf = dcf_analysis(
+        info,
+        fundamental
+    )
+
+    valuation = valuation_analysis(
+        technical["price"],
+        fundamental,
+        dcf
+    )
+
+    risk, risk_reasons = risk_analysis(
+        fundamental,
+        technical
+    )
+
+    simon_score = calculate_simon_score(
+        technical,
+        fundamental,
+        valuation,
+        risk
+    )
+
+    zone, zone_description = price_zone(
+        technical["price"],
+        valuation
+    )
+
+    return {
+
+        "ticker": ticker,
+
+        "info": info,
+
+        "history": history,
+
+        "technical_df": technical_df,
+
+        "technical": technical,
+
+        "fundamental": fundamental,
+
+        "dcf": dcf,
+
+        "valuation": valuation,
+
+        "risk": risk,
+
+        "risk_reasons": risk_reasons,
+
+        "simon_score": simon_score,
+
+        "zone": zone,
+
+        "zone_description": zone_description,
+
+    }
+
 
 # ============================================================
 # SIDEBAR
@@ -2504,65 +1695,111 @@ st.markdown(
 
 with st.sidebar:
 
-    st.header("🔎 Research")
+    st.header("🔎 Simon Stock V9")
 
-    symbol = st.text_input(
+    ticker = st.text_input(
         "股票代码",
-        value="AAPL"
-    ).upper().strip()
+        "AAPL"
+    ).strip().upper()
 
     period = st.selectbox(
-        "历史数据",
+        "行情周期",
         [
             "6mo",
             "1y",
             "2y",
             "5y",
-            "10y"
+            "max",
         ],
         index=1
     )
 
-    st.divider()
+    if st.button(
+        "🚀 深度分析",
+        use_container_width=True
+    ):
 
-    st.header("🎯 Simon Settings")
+        st.cache_data.clear()
 
-    risk_preference = st.selectbox(
-        "风险偏好",
-        [
-            "保守",
-            "平衡",
-            "进取"
-        ],
-        index=1
-    )
-
-    horizon = st.selectbox(
-        "投资期限",
-        [
-            "短期",
-            "1–3年",
-            "3–5年",
-            "5年以上"
-        ],
-        index=2
-    )
+        st.rerun()
 
     st.divider()
 
-    st.info(
-        "核心分析无需 OpenAI API Key。"
+    st.subheader("⭐ 自选股")
+
+    new_stock = st.text_input(
+        "添加股票",
+        placeholder="AMD"
     )
 
-    st.caption(
-        "Simon Stock V7.0"
-    )
+    if st.button("添加"):
+
+        symbol = (
+            new_stock
+            .strip()
+            .upper()
+        )
+
+        if (
+            symbol
+            and symbol not in st.session_state.watchlist
+        ):
+
+            st.session_state.watchlist.append(
+                symbol
+            )
+
+            st.rerun()
+
+    if st.session_state.watchlist:
+
+        remove_stock = st.selectbox(
+            "删除股票",
+            ["不删除"]
+            + st.session_state.watchlist
+        )
+
+        if st.button("删除"):
+
+            if remove_stock != "不删除":
+
+                st.session_state.watchlist.remove(
+                    remove_stock
+                )
+
+                st.rerun()
+
+    st.divider()
+
+    st.subheader("⚔️ 股票 PK")
+
+    pk_default = [
+        "AAPL",
+        "GOOGL",
+        "NVDA",
+    ]
+
+    pk1 = st.text_input(
+        "股票 A",
+        pk_default[0]
+    ).upper()
+
+    pk2 = st.text_input(
+        "股票 B",
+        pk_default[1]
+    ).upper()
+
+    pk3 = st.text_input(
+        "股票 C",
+        pk_default[2]
+    ).upper()
+
 
 # ============================================================
-# VALIDATION
+# MAIN ANALYSIS
 # ============================================================
 
-if not symbol:
+if not ticker:
 
     st.warning(
         "请输入股票代码。"
@@ -2570,238 +1807,163 @@ if not symbol:
 
     st.stop()
 
-# ============================================================
-# LOAD
-# ============================================================
 
-try:
+with st.spinner(
+    f"正在分析 {ticker} ..."
+):
 
-    with st.spinner(
-        "🧠 Simon 正在读取市场数据并构建研究模型..."
-    ):
-
-        history, info, news = load_stock(
-            symbol,
-            period
-        )
-
-except Exception as error:
-
-    st.error(
-        "读取股票数据失败。"
+    result = analyze_stock(
+        ticker,
+        period
     )
 
-    st.code(
-        str(error)
+
+if result is None:
+
+    st.error(
+        f"无法获取 {ticker} 的数据，请检查股票代码。"
     )
 
     st.stop()
 
-if (
-    history is None
-    or history.empty
-):
 
-    st.error(
-        f"没有找到 {symbol} 的有效市场数据。"
-    )
+info = result["info"]
 
-    st.stop()
+technical = result["technical"]
+
+fundamental = result["fundamental"]
+
+valuation = result["valuation"]
+
+dcf = result["dcf"]
+
+risk = result["risk"]
+
+score = result["simon_score"]
+
+zone = result["zone"]
+
+zone_description = result[
+    "zone_description"
+]
+
+company_name = (
+    info.get("longName")
+    or info.get("shortName")
+    or ticker
+)
+
 
 # ============================================================
-# CALCULATIONS
+# HEADER
 # ============================================================
 
-technical = technical_analysis(
-    history
+st.markdown(
+    '<div class="main-title">📈 SIMON STOCK V9</div>',
+    unsafe_allow_html=True
 )
 
-metrics = fundamental_metrics(
-    info
+st.markdown(
+    '<div class="subtitle">'
+    'US Stock Research Terminal · '
+    'Fundamental + Technical + Valuation + Risk'
+    '</div>',
+    unsafe_allow_html=True
 )
 
-quality = data_quality(
-    history,
-    info
+st.markdown(
+    f"## {ticker} · {company_name}"
 )
 
-price = technical.get(
-    "price",
-    np.nan
+st.caption(
+    f"{info.get('sector', 'Unknown')} · "
+    f"{info.get('industry', 'Unknown')}"
 )
 
-score, dimension_scores = calculate_simon_score(
-    info,
-    metrics,
-    technical
-)
-
-valuation = fair_value_engine(
-    info,
-    price
-)
-
-price_score = price_attractiveness(
-    price,
-    valuation
-)
-
-verdict, verdict_reason = generate_verdict(
-    score,
-    price_score,
-    price,
-    valuation,
-    risk_preference
-)
-
-masters = master_council(
-    metrics,
-    score,
-    valuation
-)
-
-bull = bull_case(
-    metrics,
-    score
-)
-
-bear = bear_case(
-    metrics,
-    technical
-)
-
-devil = devil_advocate(
-    metrics,
-    score,
-    valuation
-)
-
-breakers = thesis_breakers(
-    metrics
-)
-
-scenarios = scenario_analysis(
-    price,
-    valuation
-)
-
-plan = position_plan(
-    price,
-    valuation,
-    risk_preference
-)
-
-company = info.get(
-    "longName",
-    symbol
-)
-
-sector = info.get(
-    "sector",
-    "N/A"
-)
-
-industry = info.get(
-    "industry",
-    "N/A"
-)
-
-previous_price = np.nan
-
-if len(history) >= 2:
-
-    previous_price = safe_float(
-        history["Close"].iloc[-2]
-    )
-
-daily_change = np.nan
-
-if (
-    not np.isnan(price)
-    and not np.isnan(previous_price)
-    and previous_price != 0
-):
-
-    daily_change = (
-        price /
-        previous_price -
-        1
-    )
 
 # ============================================================
 # TOP METRICS
 # ============================================================
 
-st.subheader(
-    f"{company} · {symbol}"
+c1, c2, c3, c4, c5 = st.columns(5)
+
+c1.metric(
+    "当前价格",
+    money(
+        technical["price"]
+    )
 )
 
-c1, c2, c3, c4, c5, c6 = st.columns(6)
+c2.metric(
+    "Simon Score",
+    f"{score:.0f}/100"
+)
 
-with c1:
+c3.metric(
+    "评级",
+    score_label(score)
+)
 
-    st.metric(
-        "Price",
-        (
-            f"${price:.2f}"
-            if not np.isnan(price)
-            else "N/A"
-        ),
-        (
-            f"{daily_change * 100:+.2f}%"
-            if not np.isnan(daily_change)
-            else None
-        )
+c4.metric(
+    "行动",
+    score_action(score)
+)
+
+c5.metric(
+    "风险",
+    f"{risk:.0f}/100"
+)
+
+
+# ============================================================
+# PRICE ZONE
+# ============================================================
+
+st.subheader(
+    "🎯 Simon Price Zone"
+)
+
+p1, p2, p3, p4, p5 = st.columns(5)
+
+p1.metric(
+    "白菜价",
+    money(
+        valuation["cheap"]
     )
+)
 
-with c2:
-
-    st.metric(
-        "Simon Score",
-        f"{score}/100"
+p2.metric(
+    "买入区",
+    money(
+        valuation["low"]
     )
+)
 
-with c3:
-
-    pe = metrics[
-        "pe"
-    ]
-
-    st.metric(
-        "P/E",
-        (
-            f"{pe:.1f}x"
-            if not np.isnan(pe)
-            else "N/A"
-        )
+p3.metric(
+    "合理价值",
+    money(
+        valuation["fair"]
     )
+)
 
-with c4:
-
-    st.metric(
-        "ROE",
-        percentage(
-            metrics["roe"]
-        )
+p4.metric(
+    "合理高位",
+    money(
+        valuation["high"]
     )
+)
 
-with c5:
-
-    st.metric(
-        "Revenue Growth",
-        percentage(
-            metrics[
-                "revenue_growth"
-            ]
-        )
+p5.metric(
+    "高估参考",
+    money(
+        valuation["expensive"]
     )
+)
 
-with c6:
+st.info(
+    f"{zone} · {zone_description}"
+)
 
-    st.metric(
-        "Data Confidence",
-        f"{quality['score']}/100"
-    )
 
 # ============================================================
 # TABS
@@ -2809,18 +1971,19 @@ with c6:
 
 tabs = st.tabs(
     [
-        "🏠 Dashboard",
-        "🧠 Simon Intelligence",
-        "💰 Valuation",
-        "🏆 Master Council",
-        "⚔️ Bull vs Bear",
-        "🧨 Devil",
-        "📈 Technical",
-        "⚔️ Battle",
+        "📊 总览",
+        "📈 技术面",
+        "🏢 基本面",
+        "💰 估值",
+        "🚨 风险",
+        "⭐ 自选股",
+        "⚔️ 股票PK",
         "💼 Portfolio",
-        "📰 News"
+        "🧠 Research Report",
+        "📚 原始数据",
     ]
 )
+
 
 # ============================================================
 # DASHBOARD
@@ -2828,1246 +1991,1079 @@ tabs = st.tabs(
 
 with tabs[0]:
 
-    st.markdown(
-        "## 🧠 Simon Final Verdict"
-    )
-
     left, right = st.columns(
-        [1, 2]
+        [1.4, 1]
     )
 
     with left:
 
-        st.markdown(
-            f"""
-            <div class="card">
+        st.subheader(
+            "📈 Price Trend"
+        )
 
-            <div class="small">
-            COMPANY QUALITY SCORE
-            </div>
+        chart_df = result[
+            "technical_df"
+        ][
+            [
+                "Close",
+                "MA20",
+                "MA50",
+                "MA200",
+            ]
+        ].dropna(
+            how="all"
+        )
 
-            <div class="score">
-            {score}
-            </div>
+        st.line_chart(
+            chart_df
+        )
 
-            <div>
-            /100
-            </div>
+        st.subheader(
+            "📊 Volume"
+        )
 
-            </div>
-            """,
-            unsafe_allow_html=True
+        st.bar_chart(
+            result[
+                "technical_df"
+            ]["Volume"]
         )
 
     with right:
 
-        st.markdown(
-            f"""
-            <div class="card">
-
-            <div class="small">
-            CURRENT DECISION
-            </div>
-
-            <div class="decision">
-            {verdict}
-            </div>
-
-            <p>
-            {verdict_reason}
-            </p>
-
-            </div>
-            """,
-            unsafe_allow_html=True
+        st.subheader(
+            "🧠 Simon Score"
         )
 
-    # Quality / Price
-    q1, q2, q3 = st.columns(3)
-
-    with q1:
-
-        st.metric(
-            "Company Quality",
-            f"{score}/100"
-        )
-
-    with q2:
-
-        if np.isnan(price_score):
-
-            st.metric(
-                "Price Attractiveness",
-                "N/A"
-            )
-
-        else:
-
-            st.metric(
-                "Price Attractiveness",
-                f"{int(price_score)}/100"
-            )
-
-    with q3:
-
-        st.metric(
-            "Data Confidence",
-            f"{quality['score']}/100"
-        )
-
-    st.markdown(
-        "## 📊 Simon Dimensions"
-    )
-
-    dimension_cols = st.columns(
-        len(dimension_scores)
-    )
-
-    for column, item in zip(
-        dimension_cols,
-        dimension_scores.items()
-    ):
-
-        name, value = item
-
-        column.metric(
-            name,
-            f"{value}/100"
-        )
-
-    st.markdown(
-        "## 📈 Price History"
-    )
-
-    chart_data = history[
-        ["Close"]
-    ].copy()
-
-    chart_data.columns = [
-        symbol
-    ]
-
-    st.line_chart(
-        chart_data,
-        height=400
-    )
-
-    if valuation is not None:
-
-        st.markdown(
-            "## 💰 Price vs Simon Fair Value"
-        )
-
-        difference = (
-            price /
-            valuation["fair"] -
-            1
-        )
-
-        st.metric(
-            "相对合理价值",
-            f"{difference * 100:+.1f}%"
-        )
-
-    st.markdown(
-        "## 🏢 Company"
-    )
-
-    st.caption(
-        f"Sector: {sector} · Industry: {industry}"
-    )
-
-    company_description = info.get(
-        "longBusinessSummary",
-        "暂无公司简介。"
-    )
-
-    st.write(
-        company_description
-    )
-
-# ============================================================
-# SIMON INTELLIGENCE
-# ============================================================
-
-with tabs[1]:
-
-    st.markdown(
-        "## 🧠 Simon Intelligence Engine"
-    )
-
-    st.info(
-        "Simon 不只回答“公司好不好”，而是同时回答：公司质量、价格、安全边际，以及我可能错在哪里。"
-    )
-
-    st.markdown(
-        "### 📡 Data Quality"
-    )
-
-    d1, d2 = st.columns(2)
-
-    with d1:
-
-        st.metric(
-            "Data Score",
-            f"{quality['score']}/100"
-        )
-
-    with d2:
-
-        st.metric(
-            "Confidence",
-            quality["confidence"]
-        )
-
-    if quality["checks"]:
-
-        st.success(
-            "✓ " +
-            " · ".join(
-                quality["checks"]
-            )
-        )
-
-    if quality["issues"]:
-
-        for issue in quality["issues"]:
-
-            st.warning(
-                "⚠️ " + issue
-            )
-
-    st.divider()
-
-    st.markdown(
-        "### 📊 Core Evidence"
-    )
-
-    evidence = pd.DataFrame(
-        {
-            "指标": [
-                "Revenue Growth",
-                "Earnings Growth",
-                "Profit Margin",
-                "ROE",
-                "Debt / Equity",
-                "Free Cash Flow",
-                "FCF Yield",
-                "P/E",
-                "Forward P/E"
-            ],
-
-            "数值": [
-                percentage(
-                    metrics["revenue_growth"]
-                ),
-
-                percentage(
-                    metrics["earnings_growth"]
-                ),
-
-                percentage(
-                    metrics["profit_margin"]
-                ),
-
-                percentage(
-                    metrics["roe"]
-                ),
-
-                (
-                    f"{metrics['debt_equity']:.1f}"
-                    if not np.isnan(
-                        metrics["debt_equity"]
-                    )
-                    else "N/A"
-                ),
-
-                dollar(
-                    metrics["fcf"]
-                ),
-
-                percentage(
-                    metrics["free_cashflow_yield"]
-                ),
-
-                (
-                    f"{metrics['pe']:.1f}x"
-                    if not np.isnan(
-                        metrics["pe"]
-                    )
-                    else "N/A"
-                ),
-
-                (
-                    f"{metrics['forward_pe']:.1f}x"
-                    if not np.isnan(
-                        metrics["forward_pe"]
-                    )
-                    else "N/A"
-                )
-            ]
-        }
-    )
-
-    st.dataframe(
-        evidence,
-        use_container_width=True,
-        hide_index=True
-    )
-
-    st.markdown(
-        "### 🎯 Simon Three Questions"
-    )
-
-    questions = [
-        "这是好生意吗？",
-        "这个价格值得买吗？",
-        "如果我错了，最可能错在哪里？"
-    ]
-
-    for question in questions:
-
-        st.markdown(
-            f"☐ **{question}**"
-        )
-
-    st.divider()
-
-    st.markdown(
-        "### 🧩 Simon Principles"
-    )
-
-    principles = [
-        "好公司 ≠ 好股票",
-        "价格决定未来回报率",
-        "安全边际比预测更重要",
-        "先寻找反方证据",
-        "现金也是选择权",
-        "数据不足时降低置信度"
-    ]
-
-    for principle in principles:
-
-        st.markdown(
-            f"**• {principle}**"
-        )
-
-# ============================================================
-# VALUATION
-# ============================================================
-
-with tabs[2]:
-
-    st.markdown(
-        "## 💰 Simon Valuation Lab"
-    )
-
-    if valuation is None:
-
-        st.warning(
-            "当前公司缺少足够的现金流或估值数据，暂时无法形成可靠的综合估值。"
-        )
-
-    else:
-
-        v1, v2, v3, v4, v5 = st.columns(5)
-
-        with v1:
-
-            st.metric(
-                "🔥 Strong Buy",
-                f"${valuation['strong_buy']:.2f}"
-            )
-
-        with v2:
-
-            st.metric(
-                "🟢 Buy Zone",
-                f"${valuation['buy']:.2f}"
-            )
-
-        with v3:
-
-            st.metric(
-                "🟡 Fair Value",
-                f"${valuation['fair']:.2f}"
-            )
-
-        with v4:
-
-            st.metric(
-                "🟠 Expensive",
-                f"${valuation['expensive']:.2f}"
-            )
-
-        with v5:
-
-            st.metric(
-                "🔴 Danger",
-                f"${valuation['danger']:.2f}"
-            )
-
-        st.divider()
-
-        st.markdown(
-            "### 📊 Valuation Components"
-        )
-
-        component_rows = []
-
-        dcf = valuation.get(
-            "dcf"
-        )
-
-        if dcf is not None:
-
-            component_rows.append(
-                {
-                    "模型":
-                        "DCF Base",
-                    "估值":
-                        dcf.get(
-                            "Base",
-                            np.nan
-                        )
-                }
-            )
-
-        component_rows.append(
+        score_df = pd.DataFrame(
             {
-                "模型":
-                    "Multiple",
-                "估值":
-                    valuation.get(
-                        "multiple",
-                        np.nan
-                    )
-            }
-        )
+                "Score": [
 
-        component_rows.append(
-            {
-                "模型":
-                    "FCF Yield",
-                "估值":
-                    valuation.get(
-                        "fcf_value",
-                        np.nan
-                    )
-            }
-        )
+                    technical["score"],
 
-        component_df = pd.DataFrame(
-            component_rows
-        )
-
-        component_df[
-            "估值"
-        ] = component_df[
-            "估值"
-        ].apply(
-            lambda x:
-            round(x, 2)
-            if not np.isnan(
-                safe_float(x)
-            )
-            else np.nan
-        )
-
-        st.dataframe(
-            component_df,
-            use_container_width=True,
-            hide_index=True
-        )
-
-        st.markdown(
-            "### 📉 Discount / Premium"
-        )
-
-        difference = (
-            price /
-            valuation["fair"] -
-            1
-        )
-
-        st.metric(
-            "当前价格相对合理价值",
-            f"{difference * 100:+.1f}%"
-        )
-
-        if difference <= -0.20:
-
-            st.success(
-                "价格明显低于模型合理价值。"
-            )
-
-        elif difference <= 0:
-
-            st.info(
-                "价格不高于模型合理价值。"
-            )
-
-        elif difference <= 0.20:
-
-            st.warning(
-                "价格高于模型合理价值。"
-            )
-
-        else:
-
-            st.error(
-                "价格明显高于模型合理价值。"
-            )
-
-        if dcf is not None:
-
-            st.markdown(
-                "### 📊 DCF Scenarios"
-            )
-
-            dcf_table = pd.DataFrame(
-                {
-                    "Scenario": [
-                        "Bear",
-                        "Base",
-                        "Bull"
+                    fundamental[
+                        "growth_score"
                     ],
 
-                    "Fair Value": [
-                        dcf["Bear"],
-                        dcf["Base"],
-                        dcf["Bull"]
-                    ]
-                }
-            )
+                    fundamental[
+                        "quality_score"
+                    ],
 
-            dcf_table[
-                "Upside / Downside"
-            ] = (
-                (
-                    dcf_table[
-                        "Fair Value"
-                    ] /
-                    price -
-                    1
-                ) * 100
-            ).round(1)
+                    fundamental[
+                        "balance_score"
+                    ],
 
-            dcf_table[
-                "Upside / Downside"
-            ] = (
-                dcf_table[
-                    "Upside / Downside"
-                ].astype(str)
-                + "%"
-            )
+                    fundamental[
+                        "cashflow_score"
+                    ],
 
-            st.dataframe(
-                dcf_table,
-                use_container_width=True,
-                hide_index=True
-            )
+                    fundamental[
+                        "valuation_score"
+                    ],
 
-        st.markdown(
-            "### 🎯 Simon Position Plan"
-        )
+                    100 - risk,
 
-        plan_df = pd.DataFrame(
-            plan,
-            columns=[
-                "动作",
-                "资金比例",
-                "逻辑"
+                ]
+            },
+
+            index=[
+                "技术面",
+                "成长性",
+                "盈利质量",
+                "财务健康",
+                "现金流",
+                "估值",
+                "风险调整",
             ]
         )
 
-        st.dataframe(
-            plan_df,
-            use_container_width=True,
-            hide_index=True
+        st.bar_chart(
+            score_df
         )
 
-# ============================================================
-# MASTER COUNCIL
-# ============================================================
-
-with tabs[3]:
-
-    st.markdown(
-        "## 🏆 Investment Master Council"
-    )
-
-    st.caption(
-        "这里不是声称这些投资大师会对具体股票作出这样的判断，而是将他们公开、广为人知的投资原则转化为检查框架。"
-    )
-
-    for master, opinion in masters.items():
-
-        with st.expander(
-            f"🏆 {master}",
-            expanded=True
-        ):
-
-            st.write(
-                opinion
+        st.metric(
+            "合理价值潜在空间",
+            percent(
+                valuation["upside"]
             )
-
-    st.divider()
-
-    st.markdown(
-        "### 🧠 Five Master Questions"
-    )
-
-    master_questions = [
-        "如果市场关闭五年，我还愿意持有它吗？",
-        "如果不能卖出，我还愿意买入吗？",
-        "这家公司未来十年还能变得更强吗？",
-        "管理层能否合理配置资本？",
-        "现在的价格是否提供足够安全边际？"
-    ]
-
-    for index, question in enumerate(
-        master_questions,
-        1
-    ):
-
-        st.markdown(
-            f"**{index}.** {question}"
         )
 
-# ============================================================
-# BULL VS BEAR
-# ============================================================
-
-with tabs[4]:
-
-    st.markdown(
-        "## ⚔️ Bull Case vs Bear Case"
-    )
-
-    bull_col, bear_col = st.columns(2)
-
-    with bull_col:
-
-        st.success(
-            "🟢 BULL CASE"
-        )
-
-        for point in bull:
-
-            st.markdown(
-                f"• {point}"
+        st.metric(
+            "Beta",
+            number(
+                fundamental["beta"]
             )
-
-    with bear_col:
-
-        st.error(
-            "🔴 BEAR CASE"
         )
 
-        for point in bear:
-
-            st.markdown(
-                f"• {point}"
-            )
-
-    st.divider()
-
-    st.markdown(
-        "## 🎯 What Would Change The Thesis?"
-    )
-
-    for item in breakers:
-
-        st.markdown(
-            f"☐ {item}"
-        )
-
-# ============================================================
-# DEVIL
-# ============================================================
-
-with tabs[5]:
-
-    st.markdown(
-        "## 🧨 Devil's Advocate"
-    )
-
-    st.error(
-        "这个模块故意站在“不买 / 卖出”的角度攻击当前投资逻辑。"
-    )
-
-    for index, argument in enumerate(
-        devil,
-        1
-    ):
-
-        st.markdown(
-            f"### {index}. {argument}"
-        )
-
-    st.divider()
-
-    st.markdown(
-        "### 🔥 Simon's Hard Questions"
-    )
-
-    hard_questions = [
-        "如果未来三年增长只有预期的一半，现在的估值还合理吗？",
-        "如果竞争对手突然变强，公司还有护城河吗？",
-        "如果利率长期维持高位，估值还能撑住吗？",
-        "如果我今天没有持仓，我还会买入吗？",
-        "如果股价下跌30%，我的投资逻辑会改变吗？"
-    ]
-
-    for question in hard_questions:
-
-        st.markdown(
-            f"**• {question}**"
-        )
 
 # ============================================================
 # TECHNICAL
 # ============================================================
 
-with tabs[6]:
+with tabs[1]:
 
-    st.markdown(
-        "## 📈 Technical Intelligence"
+    st.subheader(
+        "📈 Technical Analysis"
     )
 
-    t1, t2, t3, t4, t5 = st.columns(5)
+    a, b, c, d = st.columns(4)
 
-    with t1:
-
-        rsi = technical.get(
-            "rsi",
-            np.nan
+    a.metric(
+        "RSI",
+        number(
+            technical["rsi"]
         )
-
-        st.metric(
-            "RSI",
-            (
-                f"{rsi:.1f}"
-                if not np.isnan(rsi)
-                else "N/A"
-            )
-        )
-
-    with t2:
-
-        sma20 = technical.get(
-            "sma20",
-            np.nan
-        )
-
-        st.metric(
-            "SMA 20",
-            (
-                f"${sma20:.2f}"
-                if not np.isnan(sma20)
-                else "N/A"
-            )
-        )
-
-    with t3:
-
-        sma50 = technical.get(
-            "sma50",
-            np.nan
-        )
-
-        st.metric(
-            "SMA 50",
-            (
-                f"${sma50:.2f}"
-                if not np.isnan(sma50)
-                else "N/A"
-            )
-        )
-
-    with t4:
-
-        sma200 = technical.get(
-            "sma200",
-            np.nan
-        )
-
-        st.metric(
-            "SMA 200",
-            (
-                f"${sma200:.2f}"
-                if not np.isnan(sma200)
-                else "N/A"
-            )
-        )
-
-    with t5:
-
-        volatility = technical.get(
-            "volatility20",
-            np.nan
-        )
-
-        st.metric(
-            "Volatility",
-            (
-                f"{volatility * 100:.1f}%"
-                if not np.isnan(volatility)
-                else "N/A"
-            )
-        )
-
-    st.markdown(
-        "### 📊 Trend"
     )
 
-    sma20 = technical.get(
-        "sma20",
-        np.nan
+    b.metric(
+        "MA20",
+        money(
+            technical["ma20"]
+        )
     )
 
-    sma50 = technical.get(
-        "sma50",
-        np.nan
+    c.metric(
+        "MA50",
+        money(
+            technical["ma50"]
+        )
     )
 
-    sma200 = technical.get(
-        "sma200",
-        np.nan
+    d.metric(
+        "MA200",
+        money(
+            technical["ma200"]
+        )
     )
 
-    if (
-        not np.isnan(sma20)
-        and not np.isnan(sma50)
-        and not np.isnan(sma200)
+    a, b, c, d = st.columns(4)
+
+    a.metric(
+        "MACD",
+        number(
+            technical["macd"]
+        )
+    )
+
+    b.metric(
+        "MACD Signal",
+        number(
+            technical["macd_signal"]
+        )
+    )
+
+    c.metric(
+        "Volatility",
+        percent(
+            technical["volatility"]
+        )
+    )
+
+    d.metric(
+        "Technical Score",
+        f"{technical['score']:.0f}/100"
+    )
+
+    st.progress(
+        int(
+            technical["score"]
+        )
+    )
+
+    st.subheader(
+        "技术面信号"
+    )
+
+    for reason in technical[
+        "reasons"
+    ]:
+
+        st.write(
+            "• " + reason
+        )
+
+
+# ============================================================
+# FUNDAMENTAL
+# ============================================================
+
+with tabs[2]:
+
+    st.subheader(
+        "🏢 Fundamental Analysis"
+    )
+
+    a, b, c, d = st.columns(4)
+
+    a.metric(
+        "Revenue",
+        compact_number(
+            fundamental["revenue"]
+        )
+    )
+
+    b.metric(
+        "EPS",
+        number(
+            fundamental["eps"]
+        )
+    )
+
+    c.metric(
+        "Forward EPS",
+        number(
+            fundamental["forward_eps"]
+        )
+    )
+
+    d.metric(
+        "Free Cash Flow",
+        compact_number(
+            fundamental[
+                "free_cash_flow"
+            ]
+        )
+    )
+
+    fundamental_df = pd.DataFrame(
+        {
+            "指标": [
+
+                "Revenue Growth",
+
+                "Earnings Growth",
+
+                "Gross Margin",
+
+                "Operating Margin",
+
+                "Profit Margin",
+
+                "ROE",
+
+                "ROA",
+
+                "Debt / Equity",
+
+                "Current Ratio",
+
+                "P/E",
+
+                "Forward P/E",
+
+                "PEG",
+
+                "P/S",
+
+                "P/B",
+
+                "EV / EBITDA",
+
+                "Dividend Yield",
+
+            ],
+
+            "数值": [
+
+                percent(
+                    fundamental[
+                        "revenue_growth"
+                    ]
+                ),
+
+                percent(
+                    fundamental[
+                        "earnings_growth"
+                    ]
+                ),
+
+                percent(
+                    fundamental[
+                        "gross_margin"
+                    ]
+                ),
+
+                percent(
+                    fundamental[
+                        "operating_margin"
+                    ]
+                ),
+
+                percent(
+                    fundamental[
+                        "profit_margin"
+                    ]
+                ),
+
+                percent(
+                    fundamental[
+                        "roe"
+                    ]
+                ),
+
+                percent(
+                    fundamental[
+                        "roa"
+                    ]
+                ),
+
+                number(
+                    fundamental[
+                        "debt_equity"
+                    ]
+                ),
+
+                number(
+                    fundamental[
+                        "current_ratio"
+                    ]
+                ),
+
+                number(
+                    fundamental["pe"]
+                ),
+
+                number(
+                    fundamental[
+                        "forward_pe"
+                    ]
+                ),
+
+                number(
+                    fundamental["peg"]
+                ),
+
+                number(
+                    fundamental["ps"]
+                ),
+
+                number(
+                    fundamental["pb"]
+                ),
+
+                number(
+                    fundamental[
+                        "ev_ebitda"
+                    ]
+                ),
+
+                percent(
+                    fundamental[
+                        "dividend_yield"
+                    ]
+                ),
+
+            ]
+        }
+    )
+
+    st.dataframe(
+        fundamental_df,
+        hide_index=True,
+        use_container_width=True
+    )
+
+    st.subheader(
+        "Fundamental Score"
+    )
+
+    fundamental_score_df = pd.DataFrame(
+        {
+            "Score": [
+
+                fundamental[
+                    "growth_score"
+                ],
+
+                fundamental[
+                    "quality_score"
+                ],
+
+                fundamental[
+                    "balance_score"
+                ],
+
+                fundamental[
+                    "cashflow_score"
+                ],
+
+                fundamental[
+                    "valuation_score"
+                ],
+
+            ]
+        },
+
+        index=[
+            "成长性",
+            "盈利质量",
+            "财务健康",
+            "现金流",
+            "估值",
+        ]
+    )
+
+    st.bar_chart(
+        fundamental_score_df
+    )
+
+
+# ============================================================
+# VALUATION
+# ============================================================
+
+with tabs[3]:
+
+    st.subheader(
+        "💰 Simon Valuation Engine"
+    )
+
+    a, b, c = st.columns(3)
+
+    a.metric(
+        "DCF Bear",
+        money(
+            dcf["bear"]
+        )
+    )
+
+    b.metric(
+        "DCF Base",
+        money(
+            dcf["base"]
+        )
+    )
+
+    c.metric(
+        "DCF Bull",
+        money(
+            dcf["bull"]
+        )
+    )
+
+    st.divider()
+
+    st.subheader(
+        "🐻 / 🔵 / 🐂 Scenario"
+    )
+
+    scenario_df = pd.DataFrame(
+        {
+            "情景": [
+                "🐻 Bear",
+                "🔵 Base",
+                "🐂 Bull",
+            ],
+
+            "估值": [
+                money(
+                    dcf["bear"]
+                ),
+
+                money(
+                    dcf["base"]
+                ),
+
+                money(
+                    dcf["bull"]
+                ),
+            ]
+        }
+    )
+
+    st.dataframe(
+        scenario_df,
+        hide_index=True,
+        use_container_width=True
+    )
+
+    st.subheader(
+        "Simon Price Zone"
+    )
+
+    price_df = pd.DataFrame(
+        {
+            "区域": [
+
+                "🟢 白菜价",
+
+                "🟢 买入区",
+
+                "🔵 合理价值",
+
+                "🟡 合理高位",
+
+                "🔴 高估参考",
+
+            ],
+
+            "价格": [
+
+                money(
+                    valuation["cheap"]
+                ),
+
+                money(
+                    valuation["low"]
+                ),
+
+                money(
+                    valuation["fair"]
+                ),
+
+                money(
+                    valuation["high"]
+                ),
+
+                money(
+                    valuation["expensive"]
+                ),
+
+            ]
+        }
+    )
+
+    st.dataframe(
+        price_df,
+        hide_index=True,
+        use_container_width=True
+    )
+
+    if np.isfinite(
+        valuation["upside"]
     ):
 
-        if (
-            price > sma20
-            and sma20 > sma50
-            and sma50 > sma200
-        ):
-
-            st.success(
-                "🟢 多周期趋势偏强。"
+        st.metric(
+            "当前价格 → 合理价值",
+            percent(
+                valuation["upside"]
             )
+        )
 
-        elif (
-            price < sma20
-            and sma20 < sma50
-            and sma50 < sma200
-        ):
-
-            st.error(
-                "🔴 多周期趋势偏弱。"
-            )
-
-        else:
-
-            st.warning(
-                "🟡 趋势处于混合状态。"
-            )
-
-    st.markdown(
-        "### 📉 Drawdown & Range"
+    st.caption(
+        f"DCF基准增长率约 "
+        f"{percent(dcf['growth'])}；"
+        f"折现率约 "
+        f"{percent(dcf['discount'])}。"
     )
 
-    dd1, dd2, dd3 = st.columns(3)
-
-    with dd1:
-
-        max_dd = technical.get(
-            "max_drawdown",
-            np.nan
-        )
-
-        st.metric(
-            "Max Drawdown",
-            (
-                f"{max_dd * 100:.1f}%"
-                if not np.isnan(max_dd)
-                else "N/A"
-            )
-        )
-
-    with dd2:
-
-        high52 = technical.get(
-            "52w_high",
-            np.nan
-        )
-
-        st.metric(
-            "52W High",
-            (
-                f"${high52:.2f}"
-                if not np.isnan(high52)
-                else "N/A"
-            )
-        )
-
-    with dd3:
-
-        low52 = technical.get(
-            "52w_low",
-            np.nan
-        )
-
-        st.metric(
-            "52W Low",
-            (
-                f"${low52:.2f}"
-                if not np.isnan(low52)
-                else "N/A"
-            )
-        )
-
-    st.line_chart(
-        history["Close"],
-        height=400
+    st.warning(
+        "估值模型属于研究辅助模型，不是精确目标价。"
     )
+
 
 # ============================================================
-# BATTLE
+# RISK
 # ============================================================
 
-with tabs[7]:
+with tabs[4]:
 
-    st.markdown(
-        "## ⚔️ Simon Stock Battle"
+    st.subheader(
+        "🚨 Risk Radar"
     )
 
-    battle_input = st.text_input(
-        "输入 2–5 个股票代码，用逗号分隔",
-        value="AAPL,GOOGL,AVGO"
+    risk_cols = st.columns(4)
+
+    risk_cols[0].metric(
+        "Risk Score",
+        f"{risk:.0f}/100"
+    )
+
+    risk_cols[1].metric(
+        "Beta",
+        number(
+            fundamental["beta"]
+        )
+    )
+
+    risk_cols[2].metric(
+        "Volatility",
+        percent(
+            technical["volatility"]
+        )
+    )
+
+    risk_cols[3].metric(
+        "Debt / Equity",
+        number(
+            fundamental[
+                "debt_equity"
+            ]
+        )
+    )
+
+    st.progress(
+        int(risk)
+    )
+
+    if risk >= 70:
+
+        st.error(
+            "⚠️ 风险较高"
+        )
+
+    elif risk >= 50:
+
+        st.warning(
+            "⚠️ 风险中等"
+        )
+
+    else:
+
+        st.success(
+            "✅ 风险相对可控"
+        )
+
+    if result[
+        "risk_reasons"
+    ]:
+
+        st.subheader(
+            "风险来源"
+        )
+
+        for reason in result[
+            "risk_reasons"
+        ]:
+
+            st.write(
+                "• " + reason
+            )
+
+    else:
+
+        st.success(
+            "当前模型没有检测到明显的高风险因素。"
+        )
+
+
+# ============================================================
+# WATCHLIST
+# ============================================================
+
+with tabs[5]:
+
+    st.subheader(
+        "⭐ Simon Watchlist Scanner"
+    )
+
+    st.caption(
+        "自动扫描自选股并按 Simon Score 排名。"
     )
 
     if st.button(
-        "⚔️ Start Battle",
-        type="primary"
+        "🔄 刷新扫描"
     ):
 
-        battle_symbols = [
-            item.strip().upper()
-            for item in
-            battle_input.split(",")
-            if item.strip()
-        ]
+        st.cache_data.clear()
 
-        battle_symbols = list(
-            dict.fromkeys(
-                battle_symbols
+        st.rerun()
+
+    watch_rows = []
+
+    progress = st.progress(0)
+
+    total = len(
+        st.session_state.watchlist
+    )
+
+    for i, symbol in enumerate(
+        st.session_state.watchlist
+    ):
+
+        try:
+
+            data = analyze_stock(
+                symbol,
+                "6mo"
             )
-        )[:5]
 
-        battle_rows = []
+            if data is not None:
 
-        progress = st.progress(
-            0
-        )
+                t = data["technical"]
 
-        total = len(
-            battle_symbols
-        )
+                f = data["fundamental"]
 
-        for index, battle_symbol in enumerate(
-            battle_symbols
-        ):
+                v = data["valuation"]
 
-            try:
-
-                h, inf, _ = load_stock(
-                    battle_symbol,
-                    "1y"
-                )
-
-                if h.empty:
-                    continue
-
-                tech = technical_analysis(
-                    h
-                )
-
-                met = fundamental_metrics(
-                    inf
-                )
-
-                sc, dims = calculate_simon_score(
-                    inf,
-                    met,
-                    tech
-                )
-
-                p = tech.get(
-                    "price",
-                    np.nan
-                )
-
-                va = fair_value_engine(
-                    inf,
-                    p
-                )
-
-                fair_price = np.nan
-                price_score_b = np.nan
-
-                if va is not None:
-
-                    fair_price = va[
-                        "fair"
-                    ]
-
-                    price_score_b = (
-                        price_attractiveness(
-                            p,
-                            va
-                        )
-                    )
-
-                battle_rows.append(
+                watch_rows.append(
                     {
+
                         "Ticker":
-                            battle_symbol,
+                            symbol,
 
                         "Price":
+                            money(
+                                t["price"]
+                            ),
+
+                        "Simon Score":
                             round(
-                                p,
-                                2
+                                data[
+                                    "simon_score"
+                                ]
                             ),
 
-                        "Quality":
-                            sc,
-
-                        "Price Score":
-                            (
-                                int(
-                                    price_score_b
-                                )
-                                if not np.isnan(
-                                    price_score_b
-                                )
-                                else np.nan
+                        "Technical":
+                            round(
+                                t["score"]
                             ),
 
-                        "Fair Value":
-                            (
-                                round(
-                                    fair_price,
-                                    2
-                                )
-                                if not np.isnan(
-                                    fair_price
-                                )
-                                else np.nan
+                        "Fundamental":
+                            round(
+                                f["score"]
+                            ),
+
+                        "Risk":
+                            round(
+                                data["risk"]
                             ),
 
                         "Upside":
-                            (
-                                f"{(
-                                    fair_price /
-                                    p -
-                                    1
-                                ) * 100:+.1f}%"
-                                if (
-                                    not np.isnan(
-                                        fair_price
-                                    )
-                                    and p > 0
-                                )
-                                else "N/A"
-                            )
+                            percent(
+                                v["upside"]
+                            ),
+
+                        "Zone":
+                            data["zone"],
+
+                        "Action":
+                            score_action(
+                                data[
+                                    "simon_score"
+                                ]
+                            ),
+
                     }
                 )
 
-            except Exception:
-                pass
+        except Exception:
 
-            progress.progress(
-                (index + 1) /
-                max(
-                    total,
-                    1
-                )
+            pass
+
+        progress.progress(
+            int(
+                (i + 1)
+                / max(total, 1)
+                * 100
+            )
+        )
+
+    progress.empty()
+
+    if watch_rows:
+
+        watch_df = pd.DataFrame(
+            watch_rows
+        )
+
+        watch_df = watch_df.sort_values(
+            "Simon Score",
+            ascending=False
+        )
+
+        st.dataframe(
+            watch_df,
+            hide_index=True,
+            use_container_width=True
+        )
+
+    else:
+
+        st.info(
+            "暂时没有成功加载自选股。"
+        )
+
+
+# ============================================================
+# STOCK BATTLE
+# ============================================================
+
+with tabs[6]:
+
+    st.subheader(
+        "⚔️ Simon Stock Battle"
+    )
+
+    st.write(
+        f"比较："
+        f"**{pk1} vs {pk2} vs {pk3}**"
+    )
+
+    battle_rows = []
+
+    for symbol in [
+        pk1,
+        pk2,
+        pk3
+    ]:
+
+        if not symbol:
+            continue
+
+        try:
+
+            data = analyze_stock(
+                symbol,
+                "1y"
             )
 
-        if battle_rows:
+            if data is None:
+                continue
 
-            battle_df = pd.DataFrame(
-                battle_rows
+            t = data["technical"]
+
+            f = data["fundamental"]
+
+            v = data["valuation"]
+
+            battle_rows.append(
+                {
+
+                    "Ticker":
+                        symbol,
+
+                    "Price":
+                        money(
+                            t["price"]
+                        ),
+
+                    "Simon Score":
+                        round(
+                            data[
+                                "simon_score"
+                            ]
+                        ),
+
+                    "Growth":
+                        round(
+                            f[
+                                "growth_score"
+                            ]
+                        ),
+
+                    "Quality":
+                        round(
+                            f[
+                                "quality_score"
+                            ]
+                        ),
+
+                    "Valuation":
+                        round(
+                            f[
+                                "valuation_score"
+                            ]
+                        ),
+
+                    "Technical":
+                        round(
+                            t["score"]
+                        ),
+
+                    "Risk":
+                        round(
+                            data["risk"]
+                        ),
+
+                    "Fair Value":
+                        money(
+                            v["fair"]
+                        ),
+
+                    "Upside":
+                        percent(
+                            v["upside"]
+                        ),
+
+                }
             )
 
-            battle_df[
-                "Battle Score"
-            ] = (
-                battle_df[
-                    "Quality"
-                ] * 0.65
-                +
-                battle_df[
-                    "Price Score"
-                ].fillna(50) * 0.35
-            ).round(0).astype(int)
+        except Exception:
 
-            battle_df = battle_df.sort_values(
-                "Battle Score",
-                ascending=False
-            )
+            pass
 
-            st.dataframe(
-                battle_df,
-                use_container_width=True,
-                hide_index=True
-            )
+    if battle_rows:
 
-            winner = battle_df.iloc[0]
+        battle_df = pd.DataFrame(
+            battle_rows
+        )
 
-            st.success(
-                f"🏆 Simon Winner："
-                f"{winner['Ticker']} · "
-                f"Battle Score "
-                f"{winner['Battle Score']}/100"
-            )
+        battle_df = battle_df.sort_values(
+            "Simon Score",
+            ascending=False
+        )
 
-        else:
+        st.dataframe(
+            battle_df,
+            hide_index=True,
+            use_container_width=True
+        )
 
-            st.error(
-                "没有成功读取 Battle 数据。"
-            )
+        winner = battle_df.iloc[0]
+
+        st.success(
+            f"🏆 当前模型第一名："
+            f"{winner['Ticker']} · "
+            f"Simon Score "
+            f"{winner['Simon Score']}"
+        )
+
+    else:
+
+        st.warning(
+            "无法完成股票 PK。"
+        )
+
 
 # ============================================================
 # PORTFOLIO
 # ============================================================
 
-with tabs[8]:
+with tabs[7]:
 
-    st.markdown(
-        "## 💼 Simon Portfolio Brain"
+    st.subheader(
+        "💼 Portfolio Analyzer"
     )
 
-    st.write(
-        "格式：股票代码,股数,平均成本"
+    st.caption(
+        "输入你的实际持仓成本与数量，分析组合集中度。"
     )
 
-    portfolio_text = st.text_area(
-        "你的持仓",
-        value=(
-            "AAPL,2,310\n"
-            "GOOGL,2,342\n"
-            "AVGO,2,352"
-        ),
-        height=160
-    )
-
-    if st.button(
-        "🧠 Analyze Portfolio",
-        type="primary"
+    with st.form(
+        "portfolio_form"
     ):
+
+        portfolio_ticker = st.text_input(
+            "股票代码",
+            "AAPL"
+        ).upper()
+
+        portfolio_shares = st.number_input(
+            "持股数量",
+            min_value=0.0,
+            value=1.0,
+            step=1.0
+        )
+
+        portfolio_cost = st.number_input(
+            "平均成本",
+            min_value=0.0,
+            value=300.0,
+            step=1.0
+        )
+
+        submitted = st.form_submit_button(
+            "加入组合"
+        )
+
+        if submitted:
+
+            st.session_state.portfolio.append(
+                {
+
+                    "Ticker":
+                        portfolio_ticker,
+
+                    "Shares":
+                        portfolio_shares,
+
+                    "Cost":
+                        portfolio_cost,
+
+                }
+            )
+
+            st.success(
+                "已加入 Portfolio"
+            )
+
+    if st.session_state.portfolio:
 
         portfolio_rows = []
 
-        lines = (
-            portfolio_text
-            .splitlines()
-        )
+        total_value = 0
 
-        for line in lines:
+        total_cost = 0
 
-            parts = [
-                part.strip()
-                for part in
-                line.split(",")
-            ]
-
-            if len(parts) < 3:
-                continue
+        for item in (
+            st.session_state.portfolio
+        ):
 
             try:
 
-                portfolio_symbol = (
-                    parts[0].upper()
+                data = analyze_stock(
+                    item["Ticker"],
+                    "6mo"
                 )
 
-                shares = float(
-                    parts[1]
-                )
-
-                cost = float(
-                    parts[2]
-                )
-
-                h, inf, _ = load_stock(
-                    portfolio_symbol,
-                    "5d"
-                )
-
-                if h.empty:
+                if data is None:
                     continue
 
-                current_price = safe_float(
-                    h["Close"].iloc[-1]
+                price = data[
+                    "technical"
+                ]["price"]
+
+                value = (
+                    price
+                    * item["Shares"]
                 )
 
-                market_value = (
-                    current_price *
-                    shares
+                cost = (
+                    item["Cost"]
+                    * item["Shares"]
                 )
 
-                invested = (
-                    cost *
-                    shares
+                profit = (
+                    value - cost
                 )
 
-                pnl = (
-                    market_value -
-                    invested
-                )
+                total_value += value
 
-                pnl_pct = safe_div(
-                    pnl,
-                    invested,
-                    0
-                )
+                total_cost += cost
 
                 portfolio_rows.append(
                     {
+
                         "Ticker":
-                            portfolio_symbol,
+                            item["Ticker"],
 
                         "Shares":
-                            shares,
+                            item["Shares"],
 
-                        "Cost":
-                            round(
-                                cost,
-                                2
+                        "Avg Cost":
+                            money(
+                                item["Cost"]
                             ),
 
-                        "Price":
-                            round(
-                                current_price,
-                                2
+                        "Current":
+                            money(
+                                price
                             ),
 
-                        "Value":
-                            round(
-                                market_value,
-                                2
+                        "Market Value":
+                            money(
+                                value
                             ),
 
                         "P/L":
-                            round(
-                                pnl,
-                                2
+                            money(
+                                profit
                             ),
 
-                        "P/L %":
-                            f"{pnl_pct * 100:+.2f}%"
+                        "Return":
+                            percent(
+                                safe_div(
+                                    profit,
+                                    cost
+                                )
+                            ),
+
                     }
                 )
 
             except Exception:
-                continue
+
+                pass
 
         if portfolio_rows:
 
@@ -4077,249 +3073,273 @@ with tabs[8]:
 
             st.dataframe(
                 portfolio_df,
-                use_container_width=True,
-                hide_index=True
+                hide_index=True,
+                use_container_width=True
             )
-
-            total_value = portfolio_df[
-                "Value"
-            ].sum()
-
-            total_pnl = portfolio_df[
-                "P/L"
-            ].sum()
-
-            p1, p2, p3 = st.columns(3)
-
-            p1.metric(
-                "Portfolio Value",
-                f"${total_value:,.2f}"
-            )
-
-            p2.metric(
-                "Total P/L",
-                f"${total_pnl:+,.2f}"
-            )
-
-            p3.metric(
-                "Positions",
-                len(portfolio_df)
-            )
-
-            # Concentration
-            portfolio_df[
-                "Weight"
-            ] = (
-                portfolio_df[
-                    "Value"
-                ] /
-                total_value
-                if total_value > 0
-                else 0
-            )
-
-            largest_weight = (
-                portfolio_df[
-                    "Weight"
-                ].max()
-            )
-
-            st.metric(
-                "Largest Position",
-                f"{largest_weight * 100:.1f}%"
-            )
-
-            if largest_weight >= 0.50:
-
-                st.error(
-                    "⚠️ 单一持仓占比超过50%，组合集中度很高。"
-                )
-
-            elif largest_weight >= 0.30:
-
-                st.warning(
-                    "⚠️ 最大持仓超过30%，需要关注集中风险。"
-                )
-
-            else:
-
-                st.success(
-                    "组合集中度目前没有明显异常。"
-                )
-
-        else:
-
-            st.error(
-                "没有读取到有效持仓。"
-            )
-
-# ============================================================
-# NEWS
-# ============================================================
-
-with tabs[9]:
-
-    st.markdown(
-        "## 📰 Latest News"
-    )
-
-    news_rows = extract_news(
-        news
-    )
-
-    if news_rows:
-
-        for item in news_rows:
-
-            st.markdown(
-                f"### {item['Title']}"
-            )
-
-            if item[
-                "Publisher"
-            ]:
-
-                st.caption(
-                    item[
-                        "Publisher"
-                    ]
-                )
 
             st.divider()
+
+            total_profit = (
+                total_value
+                - total_cost
+            )
+
+            a, b, c = st.columns(3)
+
+            a.metric(
+                "Portfolio Value",
+                money(
+                    total_value
+                )
+            )
+
+            b.metric(
+                "Total Cost",
+                money(
+                    total_cost
+                )
+            )
+
+            c.metric(
+                "Total P/L",
+                money(
+                    total_profit
+                )
+            )
+
+        if st.button(
+            "🗑️ 清空 Portfolio"
+        ):
+
+            st.session_state.portfolio = []
+
+            st.rerun()
 
     else:
 
         st.info(
-            "当前无法从 Yahoo Finance 获取新闻。"
+            "还没有持仓。"
         )
 
+
 # ============================================================
-# FINAL SUMMARY
+# RESEARCH REPORT
+# ============================================================
+
+with tabs[8]:
+
+    st.subheader(
+        "🧠 Simon Research Report"
+    )
+
+    st.markdown(
+        f"""
+## {ticker} — {company_name}
+
+### 🧠 Simon Score
+
+**{score:.0f}/100 · {score_label(score)} · {score_action(score)}**
+
+---
+
+### 💰 估值
+
+当前价格：
+
+**{money(technical["price"])}**
+
+Simon合理价值：
+
+**{money(valuation["fair"])}**
+
+当前估值空间：
+
+**{percent(valuation["upside"])}**
+
+当前价格区域：
+
+**{zone}**
+
+{zone_description}
+
+---
+
+### 📊 技术面
+
+Technical Score：
+
+**{technical["score"]:.0f}/100**
+
+RSI：
+
+**{number(technical["rsi"])}**
+
+MA20：
+
+**{money(technical["ma20"])}**
+
+MA50：
+
+**{money(technical["ma50"])}**
+
+MA200：
+
+**{money(technical["ma200"])}**
+
+---
+
+### 🏢 基本面
+
+Fundamental Score：
+
+**{fundamental["score"]:.0f}/100**
+
+成长性：
+
+**{fundamental["growth_score"]:.0f}/100**
+
+盈利质量：
+
+**{fundamental["quality_score"]:.0f}/100**
+
+财务健康：
+
+**{fundamental["balance_score"]:.0f}/100**
+
+现金流：
+
+**{fundamental["cashflow_score"]:.0f}/100**
+
+---
+
+### 🚨 风险
+
+Risk Score：
+
+**{risk:.0f}/100**
+
+Beta：
+
+**{number(fundamental["beta"])}**
+
+---
+
+### 🐻 / 🔵 / 🐂 三情景
+
+Bear：
+
+**{money(dcf["bear"])}**
+
+Base：
+
+**{money(dcf["base"])}**
+
+Bull：
+
+**{money(dcf["bull"])}**
+
+---
+
+### 🎯 Simon结论
+
+**{score_action(score)}**
+
+模型当前认为：
+
+**{zone}**
+
+---
+
+> ⚠️ Simon Stock V9 是投资研究辅助工具，不构成投资建议。
+> Yahoo Finance 数据可能存在延迟、缺失或字段变化。
+"""
+    )
+
+
+# ============================================================
+# RAW DATA
+# ============================================================
+
+with tabs[9]:
+
+    st.subheader(
+        "📚 Raw Yahoo Finance Data"
+    )
+
+    basic_keys = [
+
+        "symbol",
+
+        "shortName",
+
+        "longName",
+
+        "sector",
+
+        "industry",
+
+        "country",
+
+        "marketCap",
+
+        "enterpriseValue",
+
+        "trailingPE",
+
+        "forwardPE",
+
+        "pegRatio",
+
+        "priceToBook",
+
+        "beta",
+
+        "fiftyTwoWeekHigh",
+
+        "fiftyTwoWeekLow",
+
+    ]
+
+    raw_info = {}
+
+    for key in basic_keys:
+
+        if key in info:
+
+            raw_info[key] = info[key]
+
+    st.json(
+        raw_info
+    )
+
+    st.subheader(
+        "Historical Data"
+    )
+
+    st.dataframe(
+        result["history"].tail(150),
+        use_container_width=True
+    )
+
+
+# ============================================================
+# FOOTER
 # ============================================================
 
 st.divider()
 
-st.markdown(
-    "## 🧠 Simon Final Summary"
-)
-
-summary_left, summary_right = st.columns(
-    2
-)
-
-with summary_left:
-
-    st.markdown(
-        f"""
-        <div class="card">
-
-        <div class="small">
-        COMPANY QUALITY
-        </div>
-
-        <h2>{score}/100</h2>
-
-        <p>
-        Business Quality：
-        {dimension_scores["Business Quality"]}/100
-        </p>
-
-        <p>
-        Growth：
-        {dimension_scores["Growth"]}/100
-        </p>
-
-        <p>
-        Profitability：
-        {dimension_scores["Profitability"]}/100
-        </p>
-
-        <p>
-        Financial Strength：
-        {dimension_scores["Financial Strength"]}/100
-        </p>
-
-        <p>
-        Capital Efficiency：
-        {dimension_scores["Capital Efficiency"]}/100
-        </p>
-
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-with summary_right:
-
-    fair_text = "N/A"
-
-    if valuation is not None:
-
-        fair_text = (
-            f"${valuation['fair']:.2f}"
-        )
-
-    price_score_text = (
-        "N/A"
-        if np.isnan(
-            price_score
-        )
-        else f"{int(price_score)}/100"
-    )
-
-    st.markdown(
-        f"""
-        <div class="card">
-
-        <div class="small">
-        PRICE DISCIPLINE
-        </div>
-
-        <h2>{verdict}</h2>
-
-        <p>
-        Current Price：
-        ${price:.2f}
-        </p>
-
-        <p>
-        Simon Fair Value：
-        {fair_text}
-        </p>
-
-        <p>
-        Price Attractiveness：
-        {price_score_text}
-        </p>
-
-        <p>
-        Investment Horizon：
-        {horizon}
-        </p>
-
-        <p>
-        Data Confidence：
-        {quality["score"]}/100
-        </p>
-
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
 st.caption(
-    "Simon Stock V7.0 · Data powered by Yahoo Finance / yfinance"
+    "Simon Stock V9 · "
+    "US Stock Research Terminal · "
+    "Data via Yahoo Finance / yfinance · "
+    + datetime.now(
+        timezone.utc
+    ).strftime(
+        "%Y-%m-%d %H:%M UTC"
+    )
 )
 
 st.caption(
-    "For investment research and education only. "
-    "Not financial advice. No investment return is guaranteed."
-)
-
-st.caption(
-    "Analysis time: "
-    +
-    datetime.now().strftime(
-        "%Y-%m-%d %H:%M:%S"
-    )
+    "Research tool only — "
+    "not financial advice."
 )
